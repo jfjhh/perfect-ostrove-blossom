@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<style>
+body
+{
+	color: #F8F;
+	background: url("pob.jpg") repeat;
+	font-family: "Comic Sans MS", "Helvetica", Sans-Serif;
+	overflow: hidden;
+}
+
+div#container
+{
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100vh;
+	width: 100vw;
+	background: rgba(0, 0, 0, 0.8);
+	-webkit-transition:	background-color 2s linear;
+	-moz-transition:	background-color 2s linear;
+	-o-transition:		background-color 2s linear;
+	transition:			background-color 2s linear;
+}
+
+div.change#container
+{
+	background: rgba(0, 0, 0, 0.9);
+}
+
+h1
+{
+	text-align: center;
+}
+
+canvas
+{
+	border: #222 2px solid;
+}
+
+canvas#bullet_canvas
+{
+	position: absolute;
+	left: 1em;
+}
+
+canvas#info_canvas
+{
+	position: absolute;
+	left: 21em;
+	margin-top: 250px;
+}
+
+img
+{
+	position: absolute;
+	left: 21em;
+	margin-top: 1em;
+}
+		</style>
+	</head>
+	<body>
+		<div id="container">
+			<h1>TouhouStrove 7: Perfect Ostrove Blossom.</h1>
+			<canvas id="bullet_canvas"></canvas>
+			<canvas id="info_canvas"></canvas>
+		</div>
+		<script src="pob.js" type="text/javascript"></script>
+		<script type="text/javascript">
+/*
+var container_change = false;
+var container = document.getElementById("container");
+setInterval(function() {
+	container.classList.toggle("change");
+}, 2000);
+*/
+		</script>
+	</body>
+</html>
