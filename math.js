@@ -11,6 +11,21 @@ function Variable(name, value)
 	this.val  = value;
 }
 
+Variable.prototype.toString = function()
+{
+	var str = "<";
+
+	if (this.name !== undefined) {
+		str += this.name;
+		if (this.val !== undefined) {
+			str += ": " + this.val;
+		}
+	}
+	str += ">";
+
+	return str;
+}
+
 function generate_variable(name, value)
 {
 	return new Variable(name, value);
@@ -32,24 +47,90 @@ function generate_expression() /* RPN arguments. */
 	return new Expression(args);
 }
 
+function curry(e, a)
+{
+	if (e.args === undefined) {
+		return {expression: e, variables: false};
+	}
+
+	var vars = false;
+	for (var i = 0; i < e.args.length; i++) {
+		if (e.args[i].name !== undefined) {
+			if (e.args[i].val !== undefined) {
+				e.args[i] = e.args[i].val;
+			}
+			var is_var = true;
+			for (var j = 0; j < a.length; j++) {
+				if (a[j].name === e.args[i].name && a[j].val !== undefined) {
+					e.args[i] = a[j].val;
+					is_var = false;
+				}
+			}
+			if (is_var) {
+				vars = true;
+			}
+		} else {
+			var c = curry(e.args[i], a);
+			e.args[i] = c.expression;
+			if (c.variables) {
+				vars = true;
+			}
+		}
+	}
+
+	return {expression: e, variables: vars};
+}
+
 var Exp = Expression;
 var _   = generate_expression;
+var $$  = curry;
 
 Expression.prototype.$ = function(a)
 {
 	return $(this, a);
 };
 
-function $(e, a) {
-	if (e.name !== undefined) {
-		for (var i = 0; i < a.length; i++) {
-			if (e.name === a[i].name) {
-				return a[i].val;
-			}
+Expression.prototype.$$ = function(a)
+{
+	return $$(this, a);
+};
+
+Expression.prototype.toString = function()
+{
+	var str = "(";
+	if (this.name !== undefined) {
+		str += "<" + this.name;
+		if (this.val === undefined) {
+			str += ">"
+		} else {
+			str += " = " + this.val + ">";
 		}
-		return "<" + e.name + "?>";
-	} else if (e.op === undefined) {
-	       return e; /* Identity if primitive. */
+	} else if (this.op === undefined) {
+		str += e;
+	} else if (this.op !== Object(this.op)) {
+		str += this.op.sym;
+	} else {
+		str += this.op.sym;
+		for (var i = 0; i < this.args.length; i++) {
+			str += " " + this.args[i].toString();
+		}
+	}
+	str += ")";
+
+	return str;
+}
+
+function $(e, a) {
+	a = a || [];
+
+	var c = curry(e, a);
+	if (c.variables) {
+		return c.expression;
+	}
+
+	e = c.expression;
+	if (e.op === undefined) {
+		return e; /* Identity if primitive. */
 	} else if (e.op !== Object(e.op)) {
 		return e.op; /* Identity if primitive. */
 	} else {
@@ -96,6 +177,7 @@ var atan  = un_argf(Math.atan);
 var rand  = mon_argf(Math.random);
 
 var operators = [
+	id,
 	add,
 	sub,
 	mul,
@@ -112,4 +194,27 @@ var operators = [
 	atan,
 	rand,
 ];
+
+var symbols = [
+	"=@=",
+	"+",
+	"-",
+	"*",
+	"/",
+	"^",
+	"floor",
+	"round",
+	"ceil",
+	"sin",
+	"cos",
+	"tan",
+	"asin",
+	"acos",
+	"atan",
+	"rand",
+];
+
+for (var i = 0; i < operators.length; i++) {
+	operators[i].sym = symbols[i];
+}
 
