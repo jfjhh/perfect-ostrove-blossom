@@ -49,7 +49,8 @@ function generate_expression() /* RPN arguments. */
 
 function curry(e, a)
 {
-	if (e.args === undefined) {
+	var a = a || [];
+	if (e === undefined || e.args === undefined) {
 		return {expression: e, variables: false};
 	}
 
@@ -57,12 +58,12 @@ function curry(e, a)
 	for (var i = 0; i < e.args.length; i++) {
 		if (e.args[i].name !== undefined) {
 			if (e.args[i].val !== undefined) {
-				e.args[i] = e.args[i].val;
+				e.args[i].val = e.args[i].val;
 			}
 			var is_var = true;
 			for (var j = 0; j < a.length; j++) {
 				if (a[j].name === e.args[i].name && a[j].val !== undefined) {
-					e.args[i] = a[j].val;
+					e.args[i].val = a[j].val;
 					is_var = false;
 				}
 			}
@@ -125,11 +126,12 @@ function $(e, a) {
 
 	var c = curry(e, a);
 	if (c.variables) {
-		return c.expression;
+		return c.out;
 	}
 
-	e = c.expression;
-	if (e.op === undefined) {
+	if (e.name !== undefined && e.val !== undefined) {
+		return e.val;
+	} else if (e.op === undefined) {
 		return e; /* Identity if primitive. */
 	} else if (e.op !== Object(e.op)) {
 		return e.op; /* Identity if primitive. */
@@ -149,12 +151,15 @@ function bin_argf(f) { return function(a, v) {return f($(a[0], v), $(a[1], v));}
 // function un_argf(f)  { return function(x)    { return f($(x)); }}
 // function bin_argf(f) { return function(x, y) { return f($(x), $(y)); }}
 
+function p_neg(a)    { return -a;    }
 function p_add(a, b) { return a + b; }
 function p_sub(a, b) { return a - b; }
 function p_mul(a, b) { return a * b; }
 function p_div(a, b) { return a / b; }
 
 var id    = un_argf(function(x){return x;});
+
+var neg   = un_argf(p_neg);
 
 var add   = bin_argf(p_add);
 var sub   = bin_argf(p_sub);
@@ -178,6 +183,7 @@ var rand  = mon_argf(Math.random);
 
 var operators = [
 	id,
+	neg,
 	add,
 	sub,
 	mul,
@@ -197,6 +203,7 @@ var operators = [
 
 var symbols = [
 	"=@=",
+	"-",
 	"+",
 	"-",
 	"*",

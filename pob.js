@@ -102,13 +102,14 @@ function Player()
 
 var player = new Player();
 
-function Danmaku(x, y, ti, v, r, n, f)
+function Danmaku(x, y, t, r, n, i, f, t0)
 {
 	/**
-	 * These are mostly functions of ti and time (frames).
+	 * These are mostly functions of t and time (frames).
 	 */
+
 	/* The initial time. */
-	this.t0 = frames;
+	this.t0 = t0 || frames;
 
 	/* x position of a bullet from ti. */
 	this.x	= x;
@@ -116,11 +117,8 @@ function Danmaku(x, y, ti, v, r, n, f)
 	/* y position of a bullet from ti. */
 	this.y	= y;
 
-	/* Instantaneous angle function. Something like a phase shift. */
-	this.ti = ti;
-
-	/* Velocity function. */
-	this.v	= v;
+	/* Parameter for all other parametric curves and equations. */
+	this.t = t;
 
 	/* Bullet radius function. TODO: Handle different bullet shapes?. */
 	this.r	= r;
@@ -128,9 +126,14 @@ function Danmaku(x, y, ti, v, r, n, f)
 	/* The number of bullets. Related to the density. */
 	this.n	= n;
 
+	/* The increment of bullets. Related to the density. */
+	this.i	= i;
+
 	/* How frequent the entire pattern is. Functions will likely be continuous,
 	 * so this discretizes them. */
-	this.f	= f;
+	// this.w	= w;
+
+	this.ttl = 1337*FPS;
 
 	/* Bullet list. */
 	this.bullets = [];
@@ -138,19 +141,17 @@ function Danmaku(x, y, ti, v, r, n, f)
 	danmaku.push(this);
 }
 
-Danmaku.prototype.run = function(t) {
-	var time   = _v("t", t - this.t0);
-	var n_val  = this.n.$(args);
-	var ti_val = ti.$([t, _v("n", n_val)]);
+Danmaku.prototype.run = function(frame) {
+	this.bullets = [];
 
-	var args = [t, _v("ti", ti_val)];
+	var time   = _v("f", frames - this.t0);
 
-	// var x  = this.x.$(args);
-	// var y  = this.y.$(args);
-	// var ti = this.ti.$(args);
-	// var tf = this.tf.$(args);
-	// var v  = this.v.$(args);
-	// var r  = this.r.$(args);
+	var t_val = this.t.$([time]);
+	var t     = _v("t", t_val);
+
+	var n_val  = this.n.$([time, t]);
+	var num    = _v("n", n_val);
+	var i_val  = this.i.$([time, t]);
 
 	/**
 	 * Problem: Turn a function of the time and number into a function
@@ -159,8 +160,11 @@ Danmaku.prototype.run = function(t) {
 	 *
 	 * TL;DR Implement partial application of functions?
 	 */
-	for (var i = 0; i < n; i++) {
-		var param = ti.$([t, _v("n", n_val)]);
+	for (var i = 0; i < n_val; i += i_val) {
+		var args = [time, num, t, _v("i", i)];
+		var x    = this.x.$(args);
+		var y    = this.y.$(args);
+		var r    = this.r.$(args);
 		this.bullets.push(new Bullet(x, y, r));
 	}
 };
@@ -298,7 +302,7 @@ function calc_density()
 				acc++;
 			} else {
 				if (ocan.data[i + 3] > 0) {
-					ocan.data[i + 3] -= 0.5;
+					//ocan.data[i + 3] -= 0.5;
 				}
 			}
 		}
@@ -361,59 +365,66 @@ function update()
 	var hy = player.y;
 
 	var was_hit = false;
-	for (var i = 0; i < bullets.length; i++) {
-		var b = bullets[i];
-
-		//if (-WIDTH > b.x || b.x > 2*WIDTH || -HEIGHT > b.y || b.y > 2*HEIGHT) {
-		if (-WIDTH/2 > b.x || b.x > 3*WIDTH/2 || -HEIGHT/2 > b.y || b.y > 3*HEIGHT/2) {
-			bullets.splice(i, 1);
+	for (var d = 0; d < danmaku.length; d++) {
+		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
+			// TODO: Delete Danmaku.
 			continue;
 		}
+		var bullets = danmaku[d].bullets;
+		for (var i = 0; i < bullets.length; i++) {
+			var b = bullets[i];
 
-		// b.x += b.v * Math.cos(b.t);
-		// b.y += b.v * Math.sin(b.t);
+			//if (-WIDTH > b.x || b.x > 2*WIDTH || -HEIGHT > b.y || b.y > 2*HEIGHT) {
+			if (-WIDTH/2 > b.x || b.x > 3*WIDTH/2 || -HEIGHT/2 > b.y || b.y > 3*HEIGHT/2) {
+				bullets.splice(i, 1);
+				continue;
+			}
 
-		// var sx = bullets[i].x + bullets[i].r;
-		// var sy = bullets[i].y + bullets[i].r;
+			// b.x += b.v * Math.cos(b.t);
+			// b.y += b.v * Math.sin(b.t);
 
-		var sx = bullets[i].x;
-		var sy = bullets[i].y;
-		var sr = bullets[i].r;
+			// var sx = bullets[i].x + bullets[i].r;
+			// var sy = bullets[i].y + bullets[i].r;
 
-		var sx_min = bullets[i].x - bullets[i].r;
-		var sy_min = bullets[i].y - bullets[i].r;
-		var sx_max = bullets[i].x + 2 * bullets[i].r;
-		var sy_max = bullets[i].y + 2 * bullets[i].r;
+			var sx = bullets[i].x;
+			var sy = bullets[i].y;
+			var sr = bullets[i].r;
 
-		// if (!player.iframe
-		//if (hx_min <= sx && sx <= hx_max && hy_min <= sy && sy <= hy_max) {
-		//if (sx_min <= hx && hx <= sx_max && sy_min <= hy && hy <= sy_max) {
-		if (Math.sqrt(Math.pow(sx - hx, 2) + Math.pow(sy - hy, 2)) < sr + hr) {
-			player.l--;
-			//if (player.l <= 0) {
-			//die();
-			//} else {
-			//player.iframe = true;
-			was_hit = true;
-			c.fillColor = "#000";
-			c.strokeColor = "#0F0";
-			c.strokeRect(sx_min, sy_min, sx_max, sy_max);
-			//player.color	= "#F00";
-			/*
+			var sx_min = bullets[i].x - bullets[i].r;
+			var sy_min = bullets[i].y - bullets[i].r;
+			var sx_max = bullets[i].x + 2 * bullets[i].r;
+			var sy_max = bullets[i].y + 2 * bullets[i].r;
+
+			// if (!player.iframe
+			//if (hx_min <= sx && sx <= hx_max && hy_min <= sy && sy <= hy_max) {
+			//if (sx_min <= hx && hx <= sx_max && sy_min <= hy && hy <= sy_max) {
+			if (Math.sqrt(Math.pow(sx - hx, 2) + Math.pow(sy - hy, 2)) < sr + hr) {
+				player.l--;
+				//if (player.l <= 0) {
+				//die();
+				//} else {
+				//player.iframe = true;
+				was_hit = true;
+				c.fillColor = "#000";
+				c.strokeColor = "#0F0";
+				c.strokeRect(sx_min, sy_min, sx_max, sy_max);
+				//player.color	= "#F00";
+				/*
 					schedule_frames(function() {
 						player.iframe = false;
 						player.color  = "#F8F";
 						return -1;
 					}, 10);
 					*/
-			hit();
-			//}
-		}
+				hit();
+				//}
+			}
 
-		if (was_hit) {
-			player.color = "#F00";
-		} else {
-			player.color = "#0F0";
+			if (was_hit) {
+				player.color = "#F00";
+			} else {
+				player.color = "#0F0";
+			}
 		}
 	}
 }
@@ -474,14 +485,21 @@ function render()
 	/* Bullets. */
 	c.fillStyle = "#F00";
 	c.fillRect(WIDTH/2 - 1, HEIGHT/2 - 1, 2, 2);
-	for (var i = 0; i < bullets.length; i++) {
-		var b = bullets[i];
-		if (0 < b.x && b.x < WIDTH && 0 < b.y && b.y < HEIGHT) {
-			c.fillStyle = "#FFF";
-			c.beginPath();
-			c.arc(b.x, b.y, b.r, 0, Math.PI*2, true);
-			c.closePath();
-			c.fill();
+	for (var d = 0; d < danmaku.length; d++) {
+		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
+			// TODO: Delete Danmaku.
+			continue;
+		}
+		var bullets = danmaku[d].bullets;
+		for (var i = 0; i < bullets.length; i++) {
+			var b = bullets[i];
+			if (0 < b.x && b.x < WIDTH && 0 < b.y && b.y < HEIGHT) {
+				c.fillStyle = "#FFF";
+				c.beginPath();
+				c.arc(b.x, b.y, b.r, 0, Math.PI*2, true);
+				c.closePath();
+				c.fill();
+			}
 		}
 	}
 
@@ -595,7 +613,7 @@ function init()
 	}, DELAY);
 
 	schedule_frames(function() {
-		over.clearRect(0, 0, WIDTH, HEIGHT);
+		//over.clearRect(0, 0, WIDTH, HEIGHT);
 	}, 10*FPS);
 
 	var pa, pb, d;
@@ -604,13 +622,33 @@ function init()
 
 	// schedule_frames(function(){asteroid(50, 1);}, 3.75*FPS, true);
 
-	schedule_frames(function(){spiral(WIDTH/2, 0, d, 2*Math.PI*PHI*pb++/d, 0.25);}, 1);
+	// schedule_frames(function(){spiral(WIDTH/2, 0, d, 2*Math.PI*PHI*pb++/d, 0.25);}, 1);
 
-	schedule_frames(function(){track(WIDTH/2, HEIGHT/5, 0,			  0.5);}, 32);
+	// schedule_frames(function(){track(WIDTH/2, HEIGHT/5, 0,			  0.5);}, 32);
 	// schedule_frames(function(){track(WIDTH/2, HEIGHT/5, Math.PI  / 8, 0.5);}, 32);
 	// schedule_frames(function(){track(WIDTH/2, HEIGHT/5, -Math.PI / 8, 0.5);}, 32);
 
 	// schedule_frames(function(){circle(WIDTH / 2, HEIGHT / 5, d, 2*Math.PI*PHI*pb++/d, 0.25);}, 1.0*FPS);
+
+	var r  = 10;
+	var x0 = WIDTH / 2;
+	var y0 = HEIGHT / 2;
+
+	/**
+	 * Danmaku(x, y, t, r, n, i, f)
+	 */
+	var d = new Danmaku(
+		_(add, x0, _(mul, _(mul, _v("t"), r), _(cos, _(add, _(mul, TAU, _(div, _v("i"), _v("n"))), _(mul, 4, _(sin, _v("t"))))))),
+		_(add, y0, _(mul, _(mul, _v("t"), r), _(sin, _(add, _(mul, TAU, _(div, _v("i"), _v("n"))), _(mul, 4, _(cos, _v("t"))))))),
+		_(div, _v("f"), 512),
+		_(id, 0.5),
+		_(id, 2048),
+		// _(add, X, _(mul, 4, _(sin, _v("t")))),
+		_(id, 1),
+		_(id, FPS)
+	);
+
+	schedule_frames(function(){d.run();}, 1);
 }
 
 init();
