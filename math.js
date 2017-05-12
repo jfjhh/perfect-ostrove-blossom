@@ -11,6 +11,7 @@ function Variable(name, value)
 	this.val  = value;
 }
 
+/*
 Variable.prototype.toString = function()
 {
 	var str = "<";
@@ -24,6 +25,16 @@ Variable.prototype.toString = function()
 	str += ">";
 
 	return str;
+}
+*/
+
+Variable.prototype.toString = function()
+{
+	if (this.name === undefined) {
+		return "<Undef. var>";
+	} else {
+		return this.name;
+	}
 }
 
 function generate_variable(name, value)
@@ -138,7 +149,77 @@ function $(e, a) {
 	} else {
 		return e.op(e.args, a);
 	}
-};
+}
+
+/*
+function interpret(s)
+{
+  var sexp = s.match(/\s*("[^"]*"|\(|\)|"|[^\s()"]+)/g);
+  if (sexp[0] != "(" || sexp[sexp.length - 1] != ")") {
+    return false;
+  }
+  sexp = sexp.slice(1, sexp.length - 1);
+
+  var args = s.substr(1, s.length - 2).split(" ");
+  var opsym = args.shift();
+  
+  var op = false;
+  for (var i = 0; i < symbols.length; i++) {
+    if (symbols[i] === opsym) {
+      op = operators[i];
+      break;
+    }
+  }
+  
+  if (!op) {
+    return false;
+  }
+}
+*/
+
+function symarr_to_expr(a)
+{
+  if (!Array.isArray(a)) {
+    return false;
+  }
+  
+  for (var i = 0; i < a.length; i++) {
+    if (Array.isArray(a[i])) {
+      a[i] = symarr_to_expr(a[i]);
+      if (a[i] === false) {
+        return false;
+      }
+    } else if (!isNaN(a[i])) {
+      var num = parseInt(a[i]);
+      if (isNaN(num)) {
+        return false;
+      }
+      a[i] = num;
+    } else {
+      var isop = false;
+      for (var j = 0; j < symbols.length; j++) {
+        if (symbols[j] === a[i]) {
+          a[i] = operators[j];
+          isop = true;
+          break;
+        }
+      }
+      if (!isop) {
+        a[i] = new Variable(a[i]);
+      }
+    }
+  }
+  
+  return new Expression(a);
+}
+
+function interpret(s)
+{
+  var sarr = s.parseSexpr();
+  return symarr_to_expr(sarr);
+}
+
+var _$_ = interpret;
 
 var PHI = (1 + Math.sqrt(5)) / 2;
 var PI  = Math.PI;
@@ -168,9 +249,9 @@ var div   = bin_argf(p_div);
 
 var pow   = bin_argf(Math.pow);
 
-var floor = bin_argf(Math.floor);
-var round = bin_argf(Math.round);
-var ceil  = bin_argf(Math.ceil);
+var floor = un_argf(Math.floor);
+var round = un_argf(Math.round);
+var ceil  = un_argf(Math.ceil);
 
 var sin   = un_argf(Math.sin);
 var cos   = un_argf(Math.cos);
@@ -224,4 +305,58 @@ var symbols = [
 for (var i = 0; i < operators.length; i++) {
 	operators[i].sym = symbols[i];
 }
+
+
+/**
+ * Sexpr parsing stuff I found online.
+ */
+
+String.prototype.parseSexpr = function() {
+	var t = this.match(/\s*("[^"]*"|\(|\)|"|[^\s()"]+)/g);
+	for (var o, c=0, i=t.length-1; i>=0; i--) {
+		var n, ti = t[i].trim();
+		if (ti == '"') return;
+		else if (ti == '(') t[i]='[', c+=1;
+		else if (ti == ')') t[i]=']', c-=1;
+		else if ((n=+ti) == ti) t[i]=n;
+		else t[i] = '\'' + ti.replace('\'', '\\\'') + '\'';
+		if (i>0 && ti!=']' && t[i-1].trim()!='(' ) t.splice(i,0, ',');
+		if (!c) if (!o) o=true; else return;
+	}
+	return c ? undefined : eval(t.join(''));
+};
+
+Array.prototype.toString = function() {
+	var s=''; for (var i=0, e=this.length; i<e; i++) s+=(s?' ':'')+this[i];
+	return '('+s+')';
+};
+
+Array.prototype.toPretty = function(s) {
+	if (!s) s = '';
+	var r = s + '(<br>';
+	var s2 = s + Array(6).join('&nbsp;');
+	for (var i=0, e=this.length; i<e; i+=1) {
+		var ai = this[i];
+		r += ai.constructor != Array ? s2+ai+'<br>' : ai.toPretty(s2);
+	}
+	return r + s + ')<br>';
+};
+
+
+/******************************************************************************/
+
+var access_test = function()
+{
+	console.log(this);
+	console.log(q);
+};
+
+var test = function()
+{
+	var vars = {q: 42};
+	var q = 2;
+	console.log(vars);
+	console.log(this);
+	access_test.call(test);
+};
 

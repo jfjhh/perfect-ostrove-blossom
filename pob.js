@@ -141,6 +141,22 @@ function Danmaku(x, y, t, r, n, i, f, t0)
 	danmaku.push(this);
 }
 
+Danmaku.prototype.numbullets = function()
+{
+	var time  = _v("f", frames - this.t0);
+	var t_val = this.t.$([time]);
+	var t     = _v("t", t_val);
+	return this.n.$([time, t]);
+};
+
+Danmaku.prototype.fork = function()
+{
+//function Danmaku(x, y, t, r, n, i, f, t0)
+	var d = new Danmaku(this.x, this.y, this.t, this.r, this.n, this.i,
+		this.f, frames);
+	return schedule_frames(d.run.bind(d), 1);
+}
+
 Danmaku.prototype.run = function(frame) {
 	this.bullets = [];
 
@@ -153,13 +169,6 @@ Danmaku.prototype.run = function(frame) {
 	var num    = _v("n", n_val);
 	var i_val  = this.i.$([time, t]);
 
-	/**
-	 * Problem: Turn a function of the time and number into a function
-	 * dependent upon the number only, where the number is a function of the
-	 * time.
-	 *
-	 * TL;DR Implement partial application of functions?
-	 */
 	for (var i = 0; i < n_val; i += i_val) {
 		var args = [time, num, t, _v("i", i)];
 		var x    = this.x.$(args);
@@ -231,8 +240,15 @@ function plot_density(density)
 	density_data.shift();
 	density_data.push(density);
 
+	// bullet_data.shift();
+	// bullet_data.push(bullets.length);
+
+	var n = 0;
+	for (var i = 0; i < danmaku.length; i++) {
+		bullets += danmaku[i].numbullets();
+	}
 	bullet_data.shift();
-	bullet_data.push(bullets.length);
+	bullet_data.push(n);
 
 	var max = 0, bmax = 0, min = 1, bmin = 31337;
 	for (var i = 0; i < density_data.length; i++) {
@@ -482,9 +498,12 @@ function render()
 	c.clearRect(0, 0, WIDTH, HEIGHT);
 	s.clearRect(0, 0, WIDTH, HEIGHT);
 
-	/* Bullets. */
 	c.fillStyle = "#F00";
-	c.fillRect(WIDTH/2 - 1, HEIGHT/2 - 1, 2, 2);
+	c.fillRect(WIDTH/2 - 1, HEIGHT/2 - 1, 3, 3);
+	c.fillRect(WIDTH/2, 0, 1, HEIGHT);
+	c.fillRect(0, HEIGHT/2, WIDTH, 1);
+
+	/* Bullets. */
 	for (var d = 0; d < danmaku.length; d++) {
 		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
 			// TODO: Delete Danmaku.
@@ -630,25 +649,40 @@ function init()
 
 	// schedule_frames(function(){circle(WIDTH / 2, HEIGHT / 5, d, 2*Math.PI*PHI*pb++/d, 0.25);}, 1.0*FPS);
 
-	var r  = 10;
+	var r  = 100;
+	var v  = 100;
 	var x0 = WIDTH / 2;
 	var y0 = HEIGHT / 2;
+
+	//var theta = "(* 1 (/ " + TAU + " n))";
+	var theta = 2 * Math.PI / 4;
+	// var vx    = "(* (* t " + v + ") (cos " + theta + "))";
+	// var vy    = "(* (* t " + v + ") (sin " + theta + "))";
+	var vx    = "0"
+	var vy    = "0"
+	var circle_x = "(+ " + x0 + " (* " + r + " (cos " + theta + ")))";
+	var circle_y = "(+ " + y0 + " (* " + r + " (sin " + theta + ")))";
 
 	/**
 	 * Danmaku(x, y, t, r, n, i, f)
 	 */
 	var d = new Danmaku(
-		_(add, x0, _(mul, _(mul, _v("t"), r), _(cos, _(add, _(mul, TAU, _(div, _v("i"), _v("n"))), _(mul, 4, _(sin, _v("t"))))))),
-		_(add, y0, _(mul, _(mul, _v("t"), r), _(sin, _(add, _(mul, TAU, _(div, _v("i"), _v("n"))), _(mul, 4, _(cos, _v("t"))))))),
-		_(div, _v("f"), 512),
-		_(id, 0.5),
-		_(id, 2048),
-		// _(add, X, _(mul, 4, _(sin, _v("t")))),
-		_(id, 1),
-		_(id, FPS)
+		_$_(circle_x), /* x */
+		_$_(circle_y), /* x */
+		//_$_("(+ " + circle_x + " " + vx + ")"), /* x */
+		//_$_("(+ " + circle_y + " " + vy + ")"), /* y */
+		_$_("(/ f 1024)"), /* t */
+		_(id, 1),   /* r */
+		_(id, 4.0), /* n */
+		_(id, 1.0),   /* i */
+		_(id, FPS)  /* f */
 	);
 
-	schedule_frames(function(){d.run();}, 1);
+	/**
+	 * TODO: Make d.run span individual instances of danmaku, so that
+	 * repeated d.run()'s will spawn many danmaku.
+	 */
+	schedule_frames(d.fork.bind(d), 10);
 }
 
 init();
