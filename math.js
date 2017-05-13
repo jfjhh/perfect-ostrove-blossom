@@ -5,28 +5,50 @@
 
 "use strict";
 
-function Variable(name, value)
+/**
+ * Variables.
+ *
+ * Name (`name`):
+ * String token name of the variable.
+ *
+ * Value (`val`):
+ * The value of the variable. It is `undefined` for variables whose values are
+ * actually variable, and the value of the variable when the variable in an
+ * Expression is substituted in.
+ *
+ * Use Old (`useold`):
+ * Use Old essentially denotes if this is a constant variable, like a way of
+ * substituting in constants (`useold === true`) or if the variable is actually
+ * expected to change with successive expression evaluations (`useold ===
+ * false`).
+ *
+ * To have variables act like unknowns all the time, leave the default `false`
+ * value for useold. This means that consecutive applications:
+ *
+ * 	exp.$([var1]).$([var2]);
+ *
+ * will never result in a value, only an Expression with variables substituted
+ * if they have their values defined.
+ *
+ * On the other hand, to do things like pass in constants to an expression that
+ * are independent of other variables, make useold `true`. Variable values are
+ * still updated if a newer one is passed, but evaluations have the property
+ * that:
+ *
+ * 	exp.$([var1]).$([var2]) === exp.$([var1, var2]);
+ * 
+ * Iff. `var1.useold === true` and the variables both have values.
+ *
+ * For example, to pass in 2*Math.PI to Expressions, you would use a variable
+ * with `useold === true`, but to pass in a parameter like `t`, you would leave
+ * the default `useold === false`.
+ */
+function Variable(name, value, useold)
 {
-	this.name = name;
-	this.val  = value;
+	this.name   = name;
+	this.val    = value;
+	this.useold = useold || false;
 }
-
-/*
-Variable.prototype.toString = function()
-{
-	var str = "<";
-
-	if (this.name !== undefined) {
-		str += this.name;
-		if (this.val !== undefined) {
-			str += ": " + this.val;
-		}
-	}
-	str += ">";
-
-	return str;
-}
-*/
 
 Variable.prototype.toString = function()
 {
@@ -37,9 +59,9 @@ Variable.prototype.toString = function()
 	}
 }
 
-function generate_variable(name, value)
+function generate_variable(name, value, useold)
 {
-	return new Variable(name, value);
+	return new Variable(name, value, useold);
 }
 
 var Var = Variable;
@@ -68,13 +90,20 @@ function curry(e, a)
 	var vars = false;
 	for (var i = 0; i < e.args.length; i++) {
 		if (e.args[i].name !== undefined) {
+			/*
 			if (e.args[i].val !== undefined) {
 				e.args[i].val = e.args[i].val;
 			}
+			*/
 			var is_var = true;
 			for (var j = 0; j < a.length; j++) {
 				if (a[j].name === e.args[i].name && a[j].val !== undefined) {
-					e.args[i].val = a[j].val;
+					/* Maybe just do `e.args[i] = a[j]`, but
+					 * do copy issues result? */
+					e.args[i].val    = a[j].val;
+					e.args[i].useold = a[j].useold;
+					is_var = false;
+				} else if (e.args[i].useold === true) {
 					is_var = false;
 				}
 			}
@@ -137,7 +166,7 @@ function $(e, a) {
 
 	var c = curry(e, a);
 	if (c.variables) {
-		return c.out;
+		return c.expression;
 	}
 
 	if (e.name !== undefined && e.val !== undefined) {
@@ -283,7 +312,7 @@ var operators = [
 ];
 
 var symbols = [
-	"=@=",
+	"=",
 	"-",
 	"+",
 	"-",

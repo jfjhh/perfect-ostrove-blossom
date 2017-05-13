@@ -7,7 +7,7 @@
 
 var WIDTH  = 3 * 100;
 var HEIGHT = 4 * 100;
-var FPS    = 120;
+var FPS    = 60;
 var DELAY  = 1e3 / FPS;
 
 //var IWIDTH  = 4 * 50;
@@ -102,38 +102,72 @@ function Player()
 
 var player = new Player();
 
-function Danmaku(x, y, t, r, n, i, f, t0)
+function Danmaku(x, y, t, r, n, i, f, subs)
 {
+	var vars = [];
+	var keys = [];
+	if (subs) {
+		keys = Object.keys(subs);
+		for (var i = 0; i < keys.length; i++) {
+			if (Number.isFinite(subs[keys[i]])) { /* Number. */
+				vars.push(generate_variable(keys[i], subs[keys[i]], true));
+			} else { /* String expression that needs to be replaced. */
+				for (var j = 0; j < keys.length; j++) {
+					if (!Number.isFinite(subs[keys[j]])) { /* Not a number. */
+						subs[keys[i]] = subs[keys[i]].replace(keys[j], subs[keys[j]]);
+					}
+				}
+			}
+		}
+		for (var i = 0;  i < arguments.length - 1; i++) { /* -1 to avoid subs. */
+			for (var j = 0;  j < keys.length; j++) { /* -1 to avoid subs. */
+				if (!Number.isFinite(subs[keys[j]])) { /* Not a number. */
+					arguments[i] = arguments[i].replace(keys[j], subs[keys[j]]);
+				}
+			}
+		}
+	}
+
+	for (var i = 0; i < arguments.length - 1; i++) { /* -1 to avoid subs. */
+		arguments[i] = _$_(arguments[i]).$(vars);
+		if (Number.isFinite(arguments[i])) { /* Number. */
+			arguments[i] = _(id, arguments[i]);
+		}
+	}
+
 	/**
 	 * These are mostly functions of t and time (frames).
 	 */
 
 	/* The initial time. */
-	this.t0 = t0 || frames;
+	this.t0   = frames;
 
 	/* x position of a bullet from ti. */
-	this.x	= x;
+	this.x    = arguments[0];
 
 	/* y position of a bullet from ti. */
-	this.y	= y;
+	this.y    = arguments[1];
 
 	/* Parameter for all other parametric curves and equations. */
-	this.t = t;
+	this.t    = arguments[2];
 
 	/* Bullet radius function. TODO: Handle different bullet shapes?. */
-	this.r	= r;
+	this.r    = arguments[3];
 
 	/* The number of bullets. Related to the density. */
-	this.n	= n;
+	this.n    = arguments[4];
 
 	/* The increment of bullets. Related to the density. */
-	this.i	= i;
+	this.i    = arguments[5];
 
-	/* How frequent the entire pattern is. Functions will likely be continuous,
-	 * so this discretizes them. */
-	// this.w	= w;
+	/* The period of the Danmaku is repeated. */
+	this.p    = arguments[6];
 
-	this.ttl = 1337*FPS;
+	/* Time to live: how long until the Danmaku disappears. */
+	this.ttl  = 15 * FPS;
+
+	/* Save the variables. */
+	this.vars = vars;
 
 	/* Bullet list. */
 	this.bullets = [];
@@ -151,9 +185,13 @@ Danmaku.prototype.numbullets = function()
 
 Danmaku.prototype.fork = function()
 {
-//function Danmaku(x, y, t, r, n, i, f, t0)
-	var d = new Danmaku(this.x, this.y, this.t, this.r, this.n, this.i,
-		this.f, frames);
+	var d    = Object.create(Danmaku.prototype);
+	var keys = Object.keys(this);
+	for (var i = 0; i < keys.length; i++) {
+		d[keys[i]] = this[keys[i]];
+	}
+	d.t0 = frames;
+	danmaku.push(d);
 	return schedule_frames(d.run.bind(d), 1);
 }
 
@@ -162,18 +200,18 @@ Danmaku.prototype.run = function(frame) {
 
 	var time   = _v("f", frames - this.t0);
 
-	var t_val = this.t.$([time]);
+	var t_val = this.t.$(this.vars.concat([time]));
 	var t     = _v("t", t_val);
 
-	var n_val  = this.n.$([time, t]);
+	var n_val  = this.n.$(this.vars.concat([time, t]));
 	var num    = _v("n", n_val);
-	var i_val  = this.i.$([time, t]);
+	var i_val  = this.i.$(this.vars.concat([time, t]));
 
 	for (var i = 0; i < n_val; i += i_val) {
 		var args = [time, num, t, _v("i", i)];
-		var x    = this.x.$(args);
-		var y    = this.y.$(args);
-		var r    = this.r.$(args);
+		var x    = this.x.$(this.vars.concat(args));
+		var y    = this.y.$(this.vars.concat(args));
+		var r    = this.r.$(this.vars.concat(args));
 		this.bullets.push(new Bullet(x, y, r));
 	}
 };
@@ -235,6 +273,16 @@ function loop(f, wait, id)
 	}
 }
 
+var calc_fps_b = 0;
+var calc_fps_a = 0;
+var calc_fps_out = 0;
+function calc_fps()
+{
+	calc_fps_b = calc_fps_a;
+	calc_fps_a = Date.now();
+	calc_fps_out = FPS * 1e3 / (calc_fps_a - calc_fps_b);
+}
+
 function plot_density(density)
 {
 	density_data.shift();
@@ -245,7 +293,7 @@ function plot_density(density)
 
 	var n = 0;
 	for (var i = 0; i < danmaku.length; i++) {
-		bullets += danmaku[i].numbullets();
+		n += danmaku[i].numbullets();
 	}
 	bullet_data.shift();
 	bullet_data.push(n);
@@ -288,12 +336,13 @@ function plot_density(density)
 
 	var size = 9;
 	info.fillStyle = "rgba(0, 0, 0, 0.5)";
-	info.fillRect(IWIDTH - 7 * size, IHEIGHT - 2 * size - 3 * h, IWIDTH, IHEIGHT);
+	info.fillRect(IWIDTH - 7 * size, IHEIGHT - 3 * size - 3 * h, IWIDTH, IHEIGHT);
 	info.fillStyle = "#FFF";
 	info.font = size + "px Courier New";
-	info.fillText("Num: " + bullets.length, IWIDTH - 7 * size, IHEIGHT - 2 * size - h);
-	info.fillText("Min: " + min.toFixed(4), IWIDTH - 7 * size, IHEIGHT - size - h);
-	info.fillText("Max: " + max.toFixed(4), IWIDTH - 7 * size, IHEIGHT - h);
+	info.fillText("FPS: " + calc_fps_out.toFixed(2), IWIDTH - 7 * size, IHEIGHT - 3 * size - h);
+	info.fillText("Num: " + n,                       IWIDTH - 7 * size, IHEIGHT - 2 * size - h);
+	info.fillText("Min: " + min.toFixed(4),          IWIDTH - 7 * size, IHEIGHT - size - h);
+	info.fillText("Max: " + max.toFixed(4),          IWIDTH - 7 * size, IHEIGHT - h);
 }
 
 function calc_density()
@@ -382,11 +431,12 @@ function update()
 
 	var was_hit = false;
 	for (var d = 0; d < danmaku.length; d++) {
-		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
+		var bullets = danmaku[d].bullets;
+		if (bullets.length === 0 || frames - danmaku[d].t0 > danmaku[d].ttl) {
 			// TODO: Delete Danmaku.
+			danmaku.splice(d, 1);
 			continue;
 		}
-		var bullets = danmaku[d].bullets;
 		for (var i = 0; i < bullets.length; i++) {
 			var b = bullets[i];
 
@@ -499,9 +549,9 @@ function render()
 	s.clearRect(0, 0, WIDTH, HEIGHT);
 
 	c.fillStyle = "#F00";
-	c.fillRect(WIDTH/2 - 1, HEIGHT/2 - 1, 3, 3);
-	c.fillRect(WIDTH/2, 0, 1, HEIGHT);
-	c.fillRect(0, HEIGHT/2, WIDTH, 1);
+	c.fillRect(WIDTH/2, HEIGHT/2, 1, 1);
+	// c.fillRect(WIDTH/2, 0, 1, HEIGHT);
+	// c.fillRect(0, HEIGHT/2, WIDTH, 1);
 
 	/* Bullets. */
 	for (var d = 0; d < danmaku.length; d++) {
@@ -590,7 +640,13 @@ function input()
 
 function init()
 {
-	console.log("Running Perfect Ostrove Blossom.");
+	console.log("%c \u273f%c  TouhouStrove 7:%c Perfect%c Ostrove%c Blossom%c  \u273f ",
+	"color: #F8F; background: #FEF;",
+	"color: #A2F; background: #FEF;",
+	"color: #F4F; background: #FEF;",
+	"color: #F0F; background: #FEF;",
+	"color: #F4F; background: #FEF;",
+	"color: #F8F; background: #FEF;");
 
 	frames	= 0;
 	game_loop;
@@ -631,8 +687,10 @@ function init()
 		}
 	}, DELAY);
 
+	schedule_frames(calc_fps, FPS);
+
 	schedule_frames(function() {
-		//over.clearRect(0, 0, WIDTH, HEIGHT);
+		over.clearRect(0, 0, WIDTH, HEIGHT);
 	}, 10*FPS);
 
 	var pa, pb, d;
@@ -649,40 +707,54 @@ function init()
 
 	// schedule_frames(function(){circle(WIDTH / 2, HEIGHT / 5, d, 2*Math.PI*PHI*pb++/d, 0.25);}, 1.0*FPS);
 
+	/**
+	 * TODO: When numbers are converted to strings, they lose precision.
+	 * This makes a huge difference in actual output values.
+	 */
+
+	/*
 	var r  = 100;
 	var v  = 100;
 	var x0 = WIDTH / 2;
 	var y0 = HEIGHT / 2;
-
-	//var theta = "(* 1 (/ " + TAU + " n))";
-	var theta = 2 * Math.PI / 4;
-	// var vx    = "(* (* t " + v + ") (cos " + theta + "))";
-	// var vy    = "(* (* t " + v + ") (sin " + theta + "))";
-	var vx    = "0"
-	var vy    = "0"
-	var circle_x = "(+ " + x0 + " (* " + r + " (cos " + theta + ")))";
-	var circle_y = "(+ " + y0 + " (* " + r + " (sin " + theta + ")))";
+	var theta = "(* tau (/ i n))";
+	var vx    = "(* (* t v) (cos theta))";
+	var vy    = "(* (* t v) (sin theta))";
+	var circle_x = "(+ x0 (* r (cos theta)))";
+	var circle_y = "(+ y0 (* r (sin theta)))";
+	*/
 
 	/**
 	 * Danmaku(x, y, t, r, n, i, f)
 	 */
 	var d = new Danmaku(
-		_$_(circle_x), /* x */
-		_$_(circle_y), /* x */
-		//_$_("(+ " + circle_x + " " + vx + ")"), /* x */
-		//_$_("(+ " + circle_y + " " + vy + ")"), /* y */
-		_$_("(/ f 1024)"), /* t */
-		_(id, 1),   /* r */
-		_(id, 4.0), /* n */
-		_(id, 1.0),   /* i */
-		_(id, FPS)  /* f */
+		"(+ circle_x vx)", /* y */
+		"(+ circle_y vy)", /* y */
+		"(/ f 1024)",      /* t */
+		"(= br)",          /* r */
+		"(= num)",         /* n */
+		"(= inc)",         /* i */
+		"(= wait)",        /* p */
+		{/* Substitutions. */
+			wait     : FPS,
+			r        : 100,
+			br       : 3,
+			num      : 64,
+			inc      : 1,
+			v        : 256,
+			x0       : WIDTH / 2,
+			y0       : HEIGHT / 2,
+			tau      : TAU,
+			theta    : "(* tau (/ i n))",
+			vx       : "(* (* t v) (cos theta))",
+			vy       : "(* (* t v) (sin theta))",
+			circle_x : "(+ x0 (* r (cos theta)))",
+			circle_y : "(+ y0 (* r (sin theta)))",
+		}
 	);
 
-	/**
-	 * TODO: Make d.run span individual instances of danmaku, so that
-	 * repeated d.run()'s will spawn many danmaku.
-	 */
-	schedule_frames(d.fork.bind(d), 10);
+	schedule_frames(d.fork.bind(d), d.p.$());
+	 // d.fork();
 }
 
 init();
