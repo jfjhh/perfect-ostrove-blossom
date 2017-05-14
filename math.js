@@ -50,68 +50,94 @@ function Variable(name, value, useold)
 	this.useold = useold || false;
 }
 
+/**
+ * Turns the variable into it's name, for its use in a String representation of
+ * an Expression.
+ */
 Variable.prototype.toString = function()
 {
 	if (this.name === undefined) {
-		return "<Undef. var>";
+		return "#undef";
 	} else {
 		return this.name;
 	}
 }
 
+/**
+ * Generates a Variable. Wrapper for the Variable constructor.
+ */
 function generate_variable(name, value, useold)
 {
 	return new Variable(name, value, useold);
 }
 
+/* Abbreviated forms. */
 var Var = Variable;
 var _v  = generate_variable;
 
-function Expression(a) /* RPN arguments. */
+
+/**
+ * TouhouStrove S Expressions.
+ *
+ * IDK how to explain this to pleb non-Lispers, so TL;DR the argument Array of
+ * constructor has the first element as the operator, and the rest as arguments.
+ */
+function Expression(args) /* RPN arguments. */
 {
-	var args  = a;
 	this.op   = args.shift();
 	this.args = args;
 }
 
+/**
+ * Generates an Expression. Wrapper for the Expression constructor.
+ */
 function generate_expression() /* RPN arguments. */
 {
 	var args  = Array.from(arguments);
 	return new Expression(args);
 }
 
+/**
+ * Curries Expression `e` with Variables `a`.
+ *
+ * Expressions can only be evaluated when no Variables inside them are left
+ * unsubstituted, so currying takes care of this by returning the curried
+ * Expression and a flag that states if no variables are left undefined and the
+ * Expression can be evaluated into an actual value.
+ *
+ * The output object looks like this:
+ * {
+ *     expression : <curried expression>,
+ *     variables  : <true if variables unevaluated, false otherwise>
+ * }
+ */
 function curry(e, a)
 {
 	var a = a || [];
 	if (e === undefined || e.args === undefined) {
-		return {expression: e, variables: false};
+		return {
+			expression : e,
+			variables  : false,
+		};
 	}
 
 	var vars = false;
 	for (var i = 0; i < e.args.length; i++) {
-		if (e.args[i].name !== undefined) {
-			/*
-			if (e.args[i].val !== undefined) {
-				e.args[i].val = e.args[i].val;
-			}
-			*/
+		if (e.args[i].name !== undefined) { /* The argument is a Variable. */
 			var is_var = true;
 			for (var j = 0; j < a.length; j++) {
 				if (a[j].name === e.args[i].name && a[j].val !== undefined) {
-					/* Maybe just do `e.args[i] = a[j]`, but
-					 * do copy issues result? */
-					e.args[i].val    = a[j].val;
-					e.args[i].useold = a[j].useold;
-					is_var = false;
+					e.args[i] = a[j];
+					is_var    = false;
 				} else if (e.args[i].useold === true) {
-					is_var = false;
+					is_var    = false;
 				}
 			}
 			if (is_var) {
 				vars = true;
 			}
-		} else {
-			var c = curry(e.args[i], a);
+		} else { /* The argument is an Expression. Recursively curry. */
+			var c     = curry(e.args[i], a);
 			e.args[i] = c.expression;
 			if (c.variables) {
 				vars = true;
@@ -119,23 +145,37 @@ function curry(e, a)
 		}
 	}
 
-	return {expression: e, variables: vars};
+	return {
+		expression : e,
+		variables  : vars,
+	};
 }
 
+/* Abbreviated forms. */
 var Exp = Expression;
 var _   = generate_expression;
 var $$  = curry;
 
+/**
+ * Object wrapper for evaluation.
+ */
 Expression.prototype.$ = function(a)
 {
 	return $(this, a);
 };
 
+/**
+ * Object wrapper for currying.
+ */
 Expression.prototype.$$ = function(a)
 {
 	return $$(this, a);
 };
 
+/**
+ * Turns an Expression into a String that can be displayed or re-interpreted
+ * into the same Expression.
+ */
 Expression.prototype.toString = function()
 {
 	var str = "(";
@@ -161,136 +201,202 @@ Expression.prototype.toString = function()
 	return str;
 }
 
+/**
+ * Evaluates Expression `e`, given Variables `a`.
+ *
+ * This curries the Expression and actually evaluates Expressions if they are
+ * fully curried, recursively on sub-Expressions.
+ */
 function $(e, a) {
 	a = a || [];
 
+	/* Return curried expression if not fully curried. */
 	var c = curry(e, a);
 	if (c.variables) {
 		return c.expression;
 	}
 
+	/* Otherwise, return the final value. */
 	if (e.name !== undefined && e.val !== undefined) {
 		return e.val;
 	} else if (e.op === undefined) {
 		return e; /* Identity if primitive. */
 	} else if (e.op !== Object(e.op)) {
-		return e.op; /* Identity if primitive. */
-	} else {
+		return e.op; /* Operator if non-primitive. */
+	} else { /* Evaluate using the operator on the given Variables. */
 		return e.op(e.args, a);
 	}
 }
 
-/*
-function interpret(s)
+/**
+ * Parse a S Expression String into an array of symbols.
+ */
+String.prototype.parseSexpr = function()
 {
-  var sexp = s.match(/\s*("[^"]*"|\(|\)|"|[^\s()"]+)/g);
-  if (sexp[0] != "(" || sexp[sexp.length - 1] != ")") {
-    return false;
-  }
-  sexp = sexp.slice(1, sexp.length - 1);
+	var t = this.match(/\s*("[^"]*"|\(|\)|"|[^\s()"]+)/g);
 
-  var args = s.substr(1, s.length - 2).split(" ");
-  var opsym = args.shift();
-  
-  var op = false;
-  for (var i = 0; i < symbols.length; i++) {
-    if (symbols[i] === opsym) {
-      op = operators[i];
-      break;
-    }
-  }
-  
-  if (!op) {
-    return false;
-  }
-}
-*/
+	for (var o, c = 0, i = t.length - 1; i >= 0; i--) {
+		var n;
+		var ti = t[i].trim();
 
+		if (ti == '"') {
+			return;
+		} else if (ti == '(') {
+			t[i] = '[';
+			c+=1;
+		} else if (ti == ')') {
+			t[i] = ']';
+			c-=1;
+		} else if ((n=+ti) == ti) {
+			t[i] = n;
+		} else {
+			t[i] = '\'' + ti.replace('\'', '\\\'') + '\'';
+		}
+
+		if (i > 0 && ti !== ']' && t[i - 1].trim() != '(') {
+			t.splice(i, 0, ',');
+		}
+
+		if (!c) {
+			if (!o) {
+				o = true;
+			} else {
+				return;
+			}
+		}
+	}
+
+	return c ? undefined : eval(t.join(''));
+};
+
+/**
+ * Turns an array of symbols in an S Expression into the desired Expression
+ * Object.
+ */
 function symarr_to_expr(a)
 {
-  if (!Array.isArray(a)) {
-    return false;
-  }
-  
-  for (var i = 0; i < a.length; i++) {
-    if (Array.isArray(a[i])) {
-      a[i] = symarr_to_expr(a[i]);
-      if (a[i] === false) {
-        return false;
-      }
-    } else if (!isNaN(a[i])) {
-      var num = parseInt(a[i]);
-      if (isNaN(num)) {
-        return false;
-      }
-      a[i] = num;
-    } else {
-      var isop = false;
-      for (var j = 0; j < symbols.length; j++) {
-        if (symbols[j] === a[i]) {
-          a[i] = operators[j];
-          isop = true;
-          break;
-        }
-      }
-      if (!isop) {
-        a[i] = new Variable(a[i]);
-      }
-    }
-  }
-  
-  return new Expression(a);
+	if (!Array.isArray(a)) {
+		return false;
+	}
+
+	for (var i = 0; i < a.length; i++) {
+		if (Array.isArray(a[i])) {
+			a[i] = symarr_to_expr(a[i]);
+			if (a[i] === false) {
+				return false;
+			}
+		} else if (!isNaN(a[i])) {
+			var num = parseInt(a[i]);
+			if (isNaN(num)) {
+				return false;
+			}
+			a[i] = num;
+		} else {
+			var isop = false;
+			for (var j = 0; j < symbols.length; j++) {
+				if (symbols[j] === a[i]) {
+					a[i] = operators[j];
+					isop = true;
+					break;
+				}
+			}
+			if (!isop) {
+				a[i] = new Variable(a[i]);
+			}
+		}
+	}
+
+	return new Expression(a);
 }
 
+/**
+ * Interprets an input String into an Expression.
+ */
 function interpret(s)
 {
   var sarr = s.parseSexpr();
   return symarr_to_expr(sarr);
 }
 
+/* Abbreviated forms. */
 var _$_ = interpret;
 
 var PHI = (1 + Math.sqrt(5)) / 2;
 var PI  = Math.PI;
 var TAU = 2 * Math.PI;
 
-function mon_argf(f) { return function(a, v) {return f();}}
-function un_argf(f)  { return function(a, v) {return f($(a[0], v));}}
-function bin_argf(f) { return function(a, v) {return f($(a[0], v), $(a[1], v));}}
 
-// function un_argf(f)  { return function(x)    { return f($(x)); }}
-// function bin_argf(f) { return function(x, y) { return f($(x), $(y)); }}
+/**
+ * Definition of operators.
+ *
+ * Often mathematical functions.
+ */
 
+/**
+ * Turns a function of no arguments, like `Math.rand`, and turns it into an
+ * operator, suitable for the creation of an Expression.
+ */
+function mon_argf(f)
+{
+	var o  = function(a, v) { return f(); };
+	o.args = 0;
+	return o;
+}
+
+/**
+ * Turns a function of one arguments, like `Math.sin`, and turns it into an
+ * operator, suitable for the creation of an Expression.
+ */
+function un_argf(f)
+{
+	var o  = function(a, v) { return f($(a[0], v)); };
+	o.args = 1;
+	return o;
+}
+
+/**
+ * Turns a function of two arguments, like `Math.pow`, and turns it into an
+ * operator, suitable for the creation of an Expression.
+ */
+function bin_argf(f)
+{
+	var o  = function(a, v) { return f($(a[0], v), $(a[1], v)); };
+	o.args = 2;
+	return o;
+}
+
+/**
+ * Define functions for arithmetic operators.
+ */
+function p_id(a)     { return a;     }
 function p_neg(a)    { return -a;    }
 function p_add(a, b) { return a + b; }
 function p_sub(a, b) { return a - b; }
 function p_mul(a, b) { return a * b; }
 function p_div(a, b) { return a / b; }
 
-var id    = un_argf(function(x){return x;});
+/**
+ * Define operators.
+ */
+var id    = un_argf(p_id);         /* The identity.      */
+var neg   = un_argf(p_neg);        /* Negation.          */
+var add   = bin_argf(p_add);       /* Addition.          */
+var sub   = bin_argf(p_sub);       /* Subtraction.       */
+var mul   = bin_argf(p_mul);       /* Multiplication.    */
+var div   = bin_argf(p_div);       /* Division.          */
+var pow   = bin_argf(Math.pow);    /* Exponentiation.    */
+var floor = un_argf(Math.floor);   /* Flooring.          */
+var round = un_argf(Math.round);   /* Rounding.          */
+var ceil  = un_argf(Math.ceil);    /* Ceiling.           */
+var sin   = un_argf(Math.sin);     /* Sin.               */
+var cos   = un_argf(Math.cos);     /* Cosine.            */
+var tan   = un_argf(Math.tan);     /* Tangent.           */
+var asin  = un_argf(Math.asin);    /* Arc Sin.           */
+var acos  = un_argf(Math.acos);    /* Arc Cosine.        */
+var atan  = un_argf(Math.atan);    /* Arc Tangent.       */
+var rand  = mon_argf(Math.random); /* Random Generation. */
 
-var neg   = un_argf(p_neg);
-
-var add   = bin_argf(p_add);
-var sub   = bin_argf(p_sub);
-var mul   = bin_argf(p_mul);
-var div   = bin_argf(p_div);
-
-var pow   = bin_argf(Math.pow);
-
-var floor = un_argf(Math.floor);
-var round = un_argf(Math.round);
-var ceil  = un_argf(Math.ceil);
-
-var sin   = un_argf(Math.sin);
-var cos   = un_argf(Math.cos);
-var tan   = un_argf(Math.tan);
-var asin  = un_argf(Math.asin);
-var acos  = un_argf(Math.acos);
-var atan  = un_argf(Math.atan);
-
-var rand  = mon_argf(Math.random);
-
+/* Store the operators in an Array for use as a whole. */
 var operators = [
 	id,
 	neg,
@@ -311,6 +417,7 @@ var operators = [
 	rand,
 ];
 
+/* The symbols for operators in their String representation. */
 var symbols = [
 	"=",
 	"-",
@@ -331,61 +438,8 @@ var symbols = [
 	"rand",
 ];
 
+/* Assign operators their symbols. */
 for (var i = 0; i < operators.length; i++) {
 	operators[i].sym = symbols[i];
 }
-
-
-/**
- * Sexpr parsing stuff I found online.
- */
-
-String.prototype.parseSexpr = function() {
-	var t = this.match(/\s*("[^"]*"|\(|\)|"|[^\s()"]+)/g);
-	for (var o, c=0, i=t.length-1; i>=0; i--) {
-		var n, ti = t[i].trim();
-		if (ti == '"') return;
-		else if (ti == '(') t[i]='[', c+=1;
-		else if (ti == ')') t[i]=']', c-=1;
-		else if ((n=+ti) == ti) t[i]=n;
-		else t[i] = '\'' + ti.replace('\'', '\\\'') + '\'';
-		if (i>0 && ti!=']' && t[i-1].trim()!='(' ) t.splice(i,0, ',');
-		if (!c) if (!o) o=true; else return;
-	}
-	return c ? undefined : eval(t.join(''));
-};
-
-Array.prototype.toString = function() {
-	var s=''; for (var i=0, e=this.length; i<e; i++) s+=(s?' ':'')+this[i];
-	return '('+s+')';
-};
-
-Array.prototype.toPretty = function(s) {
-	if (!s) s = '';
-	var r = s + '(<br>';
-	var s2 = s + Array(6).join('&nbsp;');
-	for (var i=0, e=this.length; i<e; i+=1) {
-		var ai = this[i];
-		r += ai.constructor != Array ? s2+ai+'<br>' : ai.toPretty(s2);
-	}
-	return r + s + ')<br>';
-};
-
-
-/******************************************************************************/
-
-var access_test = function()
-{
-	console.log(this);
-	console.log(q);
-};
-
-var test = function()
-{
-	var vars = {q: 42};
-	var q = 2;
-	console.log(vars);
-	console.log(this);
-	access_test.call(test);
-};
 
