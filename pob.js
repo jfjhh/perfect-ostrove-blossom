@@ -11,6 +11,7 @@
 
 var FPS            = 120;
 var DELAY          = 1e3 / FPS;
+var DANMAKU_FRAMES = 2;
 
 var calc_fps_b     = 0;
 var calc_fps_a     = 0;
@@ -102,7 +103,7 @@ function Player(x, y)
 	this.color  = "#0F0";                  /* Color of the player hitbox. */
 }
 
-var player = new Player(WIDTH / 2, HEIGHT / 2);
+var player = new Player(WIDTH / 2, 7 * HEIGHT / 8);
 
 
 /**
@@ -132,8 +133,10 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 			} else { /* String expression that needs to be replaced. */
 				for (var j = 0; j < keys.length; j++) {
 					if (!Number.isFinite(subs[keys[j]])) { /* Not a number. */
-						subs[keys[i]]
-							= subs[keys[i]].replace(keys[j], subs[keys[j]]);
+						while (subs[keys[i]].includes(keys[j])) {
+							subs[keys[i]]
+								= subs[keys[i]].replace(keys[j], subs[keys[j]]);
+						}
 					}
 				}
 			}
@@ -141,7 +144,9 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 		for (var i = 0;  i < arguments.length - 1; i++) { /* -1 to avoid subs. */
 			for (var j = 0;  j < keys.length; j++) { /* -1 to avoid subs. */
 				if (!Number.isFinite(subs[keys[j]])) { /* Not a number. */
-					arguments[i] = arguments[i].replace(keys[j], subs[keys[j]]);
+					while (arguments[i].includes(keys[j])) {
+						arguments[i] = arguments[i].replace(keys[j], subs[keys[j]]);
+					}
 				}
 			}
 		}
@@ -166,8 +171,6 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 	this.ttl     = 15 * FPS; /* Frames until the Danmaku disappears.    */
 	this.vars    = vars;     /* Save the variables used in Expressions. */
 	this.bullets = [];       /* Internal Danmaku Bullet list.           */
-
-	danmaku.push(this);
 }
 
 /**
@@ -188,14 +191,17 @@ function Danmaku(x, y, t, r, n, i, f, subs)
  */
 Danmaku.prototype.fork = function()
 {
+	/* Copy the base Danmaku. */
 	var d = Object.create(Danmaku.prototype);
 	for (var key in this) {
 		d[key] = this[key];
 	}
 	d.t0 = frames;
 	danmaku.push(d);
-	var sched_handle = schedule_frames(d.run.bind(d), 1);
-	d.sched_handle = sched_handle;
+
+	/* Schedule it to run periodically. */
+	var sched_handle = schedule_frames(d.run.bind(d), DANMAKU_FRAMES);
+	d.sched_handle   = sched_handle;
 	return sched_handle;
 }
 
@@ -364,7 +370,7 @@ function plot_density(density)
 	}
 
 	var size       = 9;
-	info.fillStyle = "rgba(0, 0, 0, 0.5)";
+	info.fillStyle = "rgba(0, 0, 0, 0.75)";
 	info.fillRect(IWIDTH - 7 * size, IHEIGHT - 3 * size - 3 * h, IWIDTH, IHEIGHT);
 	info.fillStyle = "#FFF";
 	info.font      = size + "px Courier New";
@@ -420,10 +426,9 @@ function update()
 
 		/* Kill the Danmaku if it is past its time to live. */
 		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
-			var d = danmaku.splice(d, 1)[0];
-			delete d.bullets;
-			if (d.sched_handle) {
-				loop_frames[d.sched_handle].kill = true;
+			var dead_danmaku = danmaku.splice(d, 1)[0];
+			if (dead_danmaku.sched_handle) {
+				loop_frames[dead_danmaku.sched_handle].kill = true;
 			}
 			continue;
 		}
@@ -473,13 +478,13 @@ function update()
 				}, 1 * FPS);
 			}
 		}
-	}
 
-	/* Kill the Danmaku if all of its Bullets are off screen. */
-	if (bullets.length === 0) {
-		var d = danmaku.splice(d, 1)[0];
-		if (d.sched_handle) {
-			loop_frames[d.sched_handle].kill = true;
+		/* Kill the Danmaku if all of its Bullets are off screen. */
+		if (bullets && bullets.length === 0) {
+			var dead_danmaku = danmaku.splice(d, 1)[0];
+			if (dead_danmaku.sched_handle) {
+				loop_frames[dead_danmaku.sched_handle].kill = true;
+			}
 		}
 	}
 }
@@ -522,8 +527,8 @@ function render()
 	s.clearRect(0, 0, WIDTH, HEIGHT);
 
 	/* Draw a dot in the center for reference. */
-	c.fillStyle = "#F00";
-	c.fillRect(WIDTH/2, HEIGHT/2, 1, 1);
+	// c.fillStyle = "#F00";
+	// c.fillRect(WIDTH/2, HEIGHT/2, 1, 1);
 
 	/* Draw Danmaku Bullets. */
 	for (var d = 0; d < danmaku.length; d++) {
@@ -601,6 +606,33 @@ function input()
 	player.y = yf;
 }
 
+/**
+ * Save the canvas image.
+ */
+var save_index = 0;
+function save()
+{
+	var canvases = [overlay, canvas];
+	for (var layer of canvases) {
+		layer.toBlob(function(blob) {
+			var a      = window.document.createElement("a");
+			a.href     = window.URL.createObjectURL(blob, {type: "image/png"});
+			a.download = this.id + "_frame_" + ("000" + save_index).slice(-4) + ".png";
+
+			/* Append anchor to body. */
+			document.body.appendChild(a);
+			a.click();
+
+			/* Remove anchor from body. */
+			document.body.removeChild(a);
+		}.bind(layer));
+	}
+	save_index++;
+}
+
+/**
+ * Initialize and run the whole thing.
+ */
 function init()
 {
 	/* Fancy CSS console output. */
@@ -654,34 +686,44 @@ function init()
 		over.clearRect(0, 0, WIDTH, HEIGHT);
 	}, 10*FPS);
 
-	/* Make a circle Danmaku. */
-	var d = new Danmaku(
-		"(+ circle_x vx)", /* x */
-		"(+ circle_y vy)", /* y */
+	/* Sophisticated Parametric Danmaku. */
+	var m = new Danmaku(
+		// "(+ x0 (+ vx (* scalex (- (* ii (cos (* a theta))) (* (cos (* b theta)) (sin (* c theta)))))))", /* x */
+		// "(+ y0 (+ vy (* scaley (- (* jj (sin (* d theta))) (sin (* e theta))))))", /* y */
+		"(+ x0 (+ vx (* scalex (- (cos (* a theta)) (^ (cos (* b theta)) j)))))", /* x */
+		"(+ y0 (+ vy (* scaley (- (sin (* c theta)) (^ (sin (* d theta)) k)))))", /* y */
 		"(/ f 1024)",      /* t */
 		"(= br)",          /* r */
 		"(= num)",         /* n */
 		"(= inc)",         /* i */
 		"(= wait)",        /* p */
 		{/* Substitutions. */
-			wait     : FPS / 2,
-			r        : 16,
-			br       : 3,
-			num      : 128,
+			wait     : 8 * FPS,
+			scalex   : 64,
+			scaley   : -64,
+			a        : 1,
+			b        : 80,
+			c        : 80,
+			d        : 80,
+			e        : 60,
+			ii       : 1,
+			jj       : 2,
+			j        : 4,
+			k        : 3,
+			br       : 1,
+			num      : 2048,
 			inc      : 1,
-			v        : 256,
-			x0       : WIDTH / 2,
+			v        : -512,
+			x0       : WIDTH  / 2,
 			y0       : HEIGHT / 2,
 			tau      : TAU,
-			theta    : "(* tau (/ i n))",
+			theta    : "(* (* tau 1) (/ i n))",
 			vx       : "(* (* t v) (cos theta))",
 			vy       : "(* (* t v) (sin theta))",
-			circle_x : "(+ x0 (* r (cos theta)))",
-			circle_y : "(+ y0 (* r (sin theta)))",
 		});
 
-	/* Make it run repeatedly. */
-	schedule_frames(d.fork.bind(d), d.p.$());
+	schedule_frames(m.fork.bind(m), m.p.$());
+	// m.fork();
 }
 
 /* Initialize the whole thing. */

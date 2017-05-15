@@ -286,7 +286,7 @@ function symarr_to_expr(a)
 				return false;
 			}
 		} else if (!isNaN(a[i])) {
-			var num = parseInt(a[i]);
+			var num = parseFloat(a[i]);
 			if (isNaN(num)) {
 				return false;
 			}
@@ -369,9 +369,8 @@ function bin_argf(f)
  * Define functions for arithmetic operators.
  */
 function p_id(a)     { return a;     }
-function p_neg(a)    { return -a;    }
 function p_add(a, b) { return a + b; }
-function p_sub(a, b) { return a - b; }
+function p_sub(a, b) { return b ? a - b : -a; }
 function p_mul(a, b) { return a * b; }
 function p_div(a, b) { return a / b; }
 
@@ -379,7 +378,6 @@ function p_div(a, b) { return a / b; }
  * Define operators.
  */
 var id    = un_argf(p_id);         /* The identity.      */
-var neg   = un_argf(p_neg);        /* Negation.          */
 var add   = bin_argf(p_add);       /* Addition.          */
 var sub   = bin_argf(p_sub);       /* Subtraction.       */
 var mul   = bin_argf(p_mul);       /* Multiplication.    */
@@ -399,7 +397,6 @@ var rand  = mon_argf(Math.random); /* Random Generation. */
 /* Store the operators in an Array for use as a whole. */
 var operators = [
 	id,
-	neg,
 	add,
 	sub,
 	mul,
@@ -420,7 +417,6 @@ var operators = [
 /* The symbols for operators in their String representation. */
 var symbols = [
 	"=",
-	"-",
 	"+",
 	"-",
 	"*",
