@@ -439,3 +439,94 @@ for (var i = 0; i < operators.length; i++) {
 	operators[i].sym = symbols[i];
 }
 
+/* Apply an operator to arguments to create Expressions. */
+function apply_op(op, exps)
+{
+	var out = [];
+	if (op.args === 0) {
+		// out = [new Expression([op])];
+		var opexp  = new Expression([op]);
+		var adjexp = new Expression([mul, _v("c"), opexp]);
+		out = [adjexp];
+	} else if (op.args === 1) {
+		for (var i = 0; i < exps.length; i++) {
+			var opexp  = new Expression([op, exps[i]]);
+			var adjexp = new Expression([mul, _v("c"), opexp]);
+			out[i] = adjexp;
+		}
+	} else if (op.args === 2) {
+		for (var i = 0; i < exps.length; i++) {
+			for (var j = 0; j < exps.length; j++) {
+				// out[i*exps.length + j] = new Expression([op, exps[i], exps[j]]);
+				var opexp  = new Expression([op, exps[i], exps[j]]);
+				var adjexp = new Expression([mul, _v("c"), opexp]);
+				out[i*exps.length + j] = adjexp;
+			}
+		}
+	}
+	return out;
+}
+
+/* Add unique constant scalar adjustments to permuted functions. */
+function constify(exp, cindex)
+{
+	/* TODO: Make me work. */
+
+	if (exp.name && exp.name[0] === "c") {
+		exp.name = "c" + cindex++;
+		return cindex;
+	}
+
+	for (var i = 0; i < exp.args.length; i++) {
+		var a = exp.args[i];
+		if (a.name && a.name[0] === "c") {
+			a.name = "c" + cindex++;
+		}
+		if (a.args) {
+			cindex = constify(exp.args[i], cindex + i + 1);
+		}
+	}
+
+	return cindex;
+}
+
+/* Permute over function space. */
+function perm_funcs(ops)
+{
+	ops.reverse();
+	var base_args = [];
+	var base_name = "t";
+	var maxargs   = 0;
+	for (var i = 0; i < ops.length; i++) {
+		for (var j = 0; j < ops[i].length; j++) {
+			var a = ops[i][j].args;
+			if (a > maxargs) {
+				maxargs = a;
+			}
+		}
+	}
+
+	for (var i = 0; i < maxargs; i++) {
+		// base_args[i] = _v(base_name + (i + 1));
+		base_args[i] = new Expression([mul,
+			_v("c"), _v(base_name + (i + 1))]);
+	}
+
+	var exps = base_args;
+	var out;
+	for (var i = 0; i < ops.length; i++) {
+		out = [];
+		for (var j = 0; j < ops[i].length; j++) {
+			var applied = apply_op(ops[i][j], exps);
+			out = out.concat(applied);
+		}
+		exps = out;
+	}
+
+	// for (var i = 0; i < out.length; i++) {
+	// 	constify(out[i], 1);
+	// }
+
+	return out;
+}
+
