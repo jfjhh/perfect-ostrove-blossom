@@ -11,7 +11,7 @@
 
 var FPS            = 120;
 var DELAY          = 1e3 / FPS;
-var DANMAKU_FRAMES = 2;
+var DANMAKU_FRAMES = 4;
 
 var calc_fps_b     = 0;
 var calc_fps_a     = 0;
@@ -168,7 +168,7 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 	this.n       = a[4];     /* The number of bullets.                  */
 	this.i       = a[5];     /* The increment of bullets. Often 1.      */
 	this.p       = a[6];     /* The period of the Danmaku is repeated.  */
-	this.ttl     = 15 * FPS; /* Frames until the Danmaku disappears.    */
+	this.ttl     = 1 * FPS;  /* Frames until the Danmaku disappears.    */
 	this.vars    = vars;     /* Save the variables used in Expressions. */
 	this.bullets = [];       /* Internal Danmaku Bullet list.           */
 }
@@ -189,14 +189,16 @@ function Danmaku(x, y, t, r, n, i, f, subs)
  * The `bind` is necessary because `fork` references `this` to copy the danmaku,
  * and `this` will have changed in the scope of `schedule_frames`.
  */
-Danmaku.prototype.fork = function()
+Danmaku.prototype.fork = function(death_callback)
 {
 	/* Copy the base Danmaku. */
 	var d = Object.create(Danmaku.prototype);
 	for (var key in this) {
 		d[key] = this[key];
 	}
-	d.t0 = frames;
+
+	d.t0        = frames;
+	d.deathfunc = death_callback;
 	danmaku.push(d);
 
 	/* Schedule it to run periodically. */
@@ -240,6 +242,20 @@ Danmaku.prototype.numbullets = function()
 {
 	return this.bullets.length;
 };
+
+/**
+ * Kill off a Danmaku gracefully.
+ */
+function kill_danmaku(index)
+{
+	var dead_danmaku = danmaku.splice(index, 1)[0];
+	if (dead_danmaku.sched_handle) {
+		loop_frames[dead_danmaku.sched_handle].kill = true;
+	}
+	if (dead_danmaku.deathfunc) {
+		dead_danmaku.deathfunc();
+	}
+}
 
 
 /**
@@ -392,7 +408,8 @@ function calc_density()
 			var i = 4 * (x + (y * WIDTH));
 			if (data[i + 0] + data[i + 1] + data[i + 2]) {
 				if (ocan.data[i + 3] < 255) {
-					ocan.data[i + 3] += 1;
+					// ocan.data[i + 3] += 1;
+					ocan.data[i + 3] += 16;
 				}
 				ocan.data[i + 0]  = ocan.data[i + 3];
 				ocan.data[i + 1]  = 128 - ocan.data[i + 3] / 2;
@@ -426,10 +443,7 @@ function update()
 
 		/* Kill the Danmaku if it is past its time to live. */
 		if (frames - danmaku[d].t0 > danmaku[d].ttl) {
-			var dead_danmaku = danmaku.splice(d, 1)[0];
-			if (dead_danmaku.sched_handle) {
-				loop_frames[dead_danmaku.sched_handle].kill = true;
-			}
+			kill_danmaku(d);
 			continue;
 		}
 
@@ -481,10 +495,7 @@ function update()
 
 		/* Kill the Danmaku if all of its Bullets are off screen. */
 		if (bullets && bullets.length === 0) {
-			var dead_danmaku = danmaku.splice(d, 1)[0];
-			if (dead_danmaku.sched_handle) {
-				loop_frames[dead_danmaku.sched_handle].kill = true;
-			}
+			kill_danmaku(d);
 		}
 	}
 }
@@ -682,9 +693,9 @@ function init()
 	schedule_frames(calc_fps, FPS);
 
 	/* Clear the heatmap overlay every once in a while. */
-	schedule_frames(function() {
-		over.clearRect(0, 0, WIDTH, HEIGHT);
-	}, 10*FPS);
+	// schedule_frames(function() {
+	// 	over.clearRect(0, 0, WIDTH, HEIGHT);
+	// }, 10*FPS);
 
 	/* Sophisticated Parametric Danmaku. */
 	var m = new Danmaku(
@@ -722,8 +733,92 @@ function init()
 			vy       : "(* (* t v) (sin theta))",
 		});
 
-	schedule_frames(m.fork.bind(m), m.p.$());
+	// schedule_frames(m.fork.bind(m), m.p.$());
 	// m.fork();
+
+	/**
+	 * Permute.
+	 */
+	var perm_base = [
+		[add, mul],
+		[sin, cos],
+		[sin, cos],
+	];
+	var perm_syms = [];
+	for (var i = 0; i < perm_base.length; i++) {
+		perm_syms[i] = perm_base[i].map(function(op) {
+			return symbols[operators.indexOf(op)];
+		});
+	}
+
+	console.log("Permutation Sets:");
+	perm_syms.map(function(symset) {
+		console.log(symset.toString());
+	});
+
+	console.log("Permuting over", count_perms_bin(perm_base), "functions ...");
+	var perms = perm_funcs(perm_base);
+	console.log("... Done!");
+
+	var consts = (4 * perm_base.length) - 1; /* Binary only. */
+	var cxstr  = "cx";
+	var cystr  = "cy";
+
+	var subs   = {
+		wait     : 8 * FPS,
+		cx1      : 32,          /* Scale x. */
+		cy1      : 32,          /* Scale y. */
+		br       : 3,
+		num      : 64,
+		inc      : 1,
+		v        : 512,
+		x0       : WIDTH  / 2,
+		y0       : HEIGHT / 2,
+		tau      : TAU,
+		theta    : "(* (* tau 1) (/ i n))",
+		vx       : "(* (* t v) (cos theta))",
+		vy       : "(* (* t v) (sin theta))",
+		t1       : "(= theta)", /* Parameter 1. */
+		t2       : "(= t)",     /* Parameter 2. */
+	};
+
+	var next_perm = function(px, py) {
+		console.log("=== Next ===");
+		subs.permx = constify(perms[px], cxstr).toString();
+		subs.permy = constify(perms[py], cystr).toString();
+
+		for (var i = 2; i <= consts; i++) {
+			subs[cxstr + i] = 1;
+			subs[cystr + i] = 1;
+		}
+
+		console.log("Danmaku (", px, ",", py, ")");
+		console.log("X: ", subs.permx.toString());
+		console.log("Y: ", subs.permy.toString());
+
+		var d = new Danmaku(
+			"(+ x0 (+ vx permx))", /* x */
+			"(+ y0 (+ vy permy))", /* y */
+			"(/ f 64)" ,           /* t */
+			"(= br)",              /* r */
+			"(= num)",             /* n */
+			"(= inc)",             /* i */
+			"(= wait)",            /* p */
+			subs);
+
+		if (++py > perms.length - 1) {
+			py = ++px;
+			if (px > perms.length - 1) {
+				console.log("Done!");
+				return;
+			}
+		}
+		
+		over.clearRect(0, 0, WIDTH, HEIGHT);
+		d.fork(next_perm.bind(d, px, py));
+	};
+
+	next_perm(0, 0);
 }
 
 /* Initialize the whole thing. */

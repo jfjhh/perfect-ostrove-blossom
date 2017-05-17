@@ -36,7 +36,7 @@
  * that:
  *
  * 	exp.$([var1]).$([var2]) === exp.$([var1, var2]);
- * 
+ *
  * Iff. `var1.useold === true` and the variables both have values.
  *
  * For example, to pass in 2*Math.PI to Expressions, you would use a variable
@@ -439,12 +439,13 @@ for (var i = 0; i < operators.length; i++) {
 	operators[i].sym = symbols[i];
 }
 
-/* Apply an operator to arguments to create Expressions. */
+/**
+ * Apply operator `op` over argument Array `exps` to create Expressions.
+ */
 function apply_op(op, exps)
 {
 	var out = [];
 	if (op.args === 0) {
-		// out = [new Expression([op])];
 		var opexp  = new Expression([op]);
 		var adjexp = new Expression([mul, _v("c"), opexp]);
 		out = [adjexp];
@@ -457,7 +458,6 @@ function apply_op(op, exps)
 	} else if (op.args === 2) {
 		for (var i = 0; i < exps.length; i++) {
 			for (var j = 0; j < exps.length; j++) {
-				// out[i*exps.length + j] = new Expression([op, exps[i], exps[j]]);
 				var opexp  = new Expression([op, exps[i], exps[j]]);
 				var adjexp = new Expression([mul, _v("c"), opexp]);
 				out[i*exps.length + j] = adjexp;
@@ -467,30 +467,31 @@ function apply_op(op, exps)
 	return out;
 }
 
-/* Add unique constant scalar adjustments to permuted functions. */
-function constify(exp, cindex)
+/**
+ * Change the generic constant `c` to unique constant scalar adjustments to
+ * `exp`, like `c1`, `c2`, `c3`, etc.
+ */
+function constify(exp, cstr)
 {
-	/* TODO: Make me work. */
-
-	if (exp.name && exp.name[0] === "c") {
-		exp.name = "c" + cindex++;
-		return cindex;
+	cstr = cstr || "c";
+	var cindex = 1;
+	var str    = exp.toString();
+	while (str.includes("c ")) {
+		str = str.replace("c ", cstr + (cindex++) + " ");
 	}
-
-	for (var i = 0; i < exp.args.length; i++) {
-		var a = exp.args[i];
-		if (a.name && a.name[0] === "c") {
-			a.name = "c" + cindex++;
-		}
-		if (a.args) {
-			cindex = constify(exp.args[i], cindex + i + 1);
-		}
-	}
-
-	return cindex;
+	return interpret(str);
 }
 
-/* Permute over function space. */
+/**
+ * Permute all `ops` over their function space.
+ *
+ * `ops` is an Array of operator arrays, where each sub-array gives the set of
+ * operators at that depth in the permutation, increasingly.
+ *
+ * E.g. for `ops = [[add, sub], [sin, cos]]`, the returned Expression array
+ * would have elements of the form:
+ * `(<add or sub> (<sin or cos> t1) (<sin or * cos> t2))`.
+ */
 function perm_funcs(ops)
 {
 	ops.reverse();
@@ -507,7 +508,6 @@ function perm_funcs(ops)
 	}
 
 	for (var i = 0; i < maxargs; i++) {
-		// base_args[i] = _v(base_name + (i + 1));
 		base_args[i] = new Expression([mul,
 			_v("c"), _v(base_name + (i + 1))]);
 	}
@@ -524,9 +524,22 @@ function perm_funcs(ops)
 	}
 
 	// for (var i = 0; i < out.length; i++) {
-	// 	constify(out[i], 1);
+	// 	out[i] = constify(out[i]);
 	// }
 
 	return out;
+}
+
+/**
+ * For the Array of operator permutation arrays `op`, calculate the number of
+ * permutations that will be output by `perm_funcs`.
+ */
+function count_perms_bin(ops)
+{
+	var count = 1 << 2 * (ops.length - 1); /* 4 ^ (ops.length - 1) */
+	for (var i = 0; i < ops.length; i++) {
+		count *= Math.pow(ops[i].length, 1 << i); /* ops[i].length ^ (2 ^ i) */
+	}
+	return count;
 }
 
