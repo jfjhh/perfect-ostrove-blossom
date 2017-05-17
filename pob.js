@@ -409,7 +409,7 @@ function calc_density()
 			if (data[i + 0] + data[i + 1] + data[i + 2]) {
 				if (ocan.data[i + 3] < 255) {
 					// ocan.data[i + 3] += 1;
-					ocan.data[i + 3] += 16;
+					ocan.data[i + 3] += 8;
 				}
 				ocan.data[i + 0]  = ocan.data[i + 3];
 				ocan.data[i + 1]  = 128 - ocan.data[i + 3] / 2;
@@ -741,7 +741,7 @@ function init()
 	 */
 	var perm_base = [
 		[add, mul],
-		[sin, cos],
+		[tan, sin, cos],
 		[sin, cos],
 	];
 	var perm_syms = [];
@@ -771,7 +771,7 @@ function init()
 		br       : 3,
 		num      : 64,
 		inc      : 1,
-		v        : 512,
+		v        : 8,
 		x0       : WIDTH  / 2,
 		y0       : HEIGHT / 2,
 		tau      : TAU,
@@ -799,7 +799,7 @@ function init()
 		var d = new Danmaku(
 			"(+ x0 (+ vx permx))", /* x */
 			"(+ y0 (+ vy permy))", /* y */
-			"(/ f 64)" ,           /* t */
+			"(/ f 8)" ,           /* t */
 			"(= br)",              /* r */
 			"(= num)",             /* n */
 			"(= inc)",             /* i */
