@@ -25,6 +25,25 @@
 <html>
 	<head>
 		<meta charset="utf-8">
+		<script type="text/javascript">
+/**
+* Gets a script with callback on success.
+ */
+function getScript(url,success)
+{
+	var head = document.getElementsByTagName("head")[0], done = false;
+	var script = document.createElement("script");
+	script.src = url;
+	/* Attach handlers for all browsers. */
+	script.onload = script.onreadystatechange = function(){
+		if (!done && (!this.readyState || this.readyState === "loaded" || this.readyState === "complete") ) {
+			done = true;
+			if (typeof success === 'function') success();
+		}
+	};
+	head.appendChild(script);
+}
+		</script>
 		<style>
 body
 {
@@ -98,11 +117,28 @@ canvas#info_canvas
 	margin-top : 250px;
 }
 
+div.expr
+{
+	font-size  : 0.75em;
+}
+
+div#eqns
+{
+	position   : absolute;
+	left       : 22em;
+	margin-top : 1em;
+}
+
 img
 {
 	position   : absolute;
 	left       : 21em;
 	margin-top : 1em;
+}
+
+span#perm_set
+{
+	font-size : 0.325em;
 }
 
 span#song
@@ -130,6 +166,23 @@ span#song:hover
 			<span id="song">
 				Left Click to Toggle Music, Right Click to Change Song!
 			</span>
+			<div id="eqns">
+				<h2>
+					Iterated
+					<span id="cur_perm">0</span>
+					of
+					<span id="max_perms">0</span> Danmaku.
+					<br />
+					<span id="perm_set"></span>
+				</h2>
+				<div class="expr" id="x_expr">
+					`x(t) = 0`
+				</div>
+				<br />
+				<div class="expr" id="y_expr">
+					`y(t) = 0`
+				</div>
+			</div>
 			<canvas id="bg_canvas"></canvas>
 			<canvas id="bullet_canvas"></canvas>
 			<canvas id="overlay_canvas"></canvas>
@@ -137,10 +190,23 @@ span#song:hover
 			<canvas id="info_canvas"></canvas>
 		</div>
 		<!-- <script type="text/javascript" src="worker.js"></script> -->
-		<script type="text/javascript" src="music.js"></script>
-		<script type="text/javascript" src="math.js"></script>
-		<script type="text/javascript" src="pob.js"></script>
-		<script type="text/javascript">
+		<script type="text/javascript" src="music.js" async></script>
+		<script type="text/javascript" src="math.js" async></script>
+		<!-- <script type="text/javascript" src="pob.js"></script> -->
+		<script type="text/javascript" defer>
+/**
+ * Load all the things.
+ */
+document.addEventListener("DOMContentLoaded", function() {
+	getScript("../mathjax/MathJax.js?config=TeX-MML-AM_CHTML", function() {
+		MathJax.Hub.Queue(function() {
+			getScript("pob.js", function() {
+				init();
+			});
+		});
+	});
+});
+
 /*
 var container_change = false;
 var container = document.getElementById("container");

@@ -64,6 +64,27 @@ Variable.prototype.toString = function()
 }
 
 /**
+ * The AsciiMath String representation of a Variable is the same as it's
+ * standard String representation.
+ */
+Variable.prototype.toAMString = function()
+{
+	if (this.name === undefined) {
+		return "#undef";
+	} else {
+		if (this.val === undefined) {
+			return this.name;
+		} else {
+			if (this.val === Math.floor(this.val)) {
+				return this.val;
+			} else {
+				return this.name;
+			}
+		}
+	}
+}
+
+/**
  * Generates a Variable. Wrapper for the Variable constructor.
  */
 function generate_variable(name, value, useold)
@@ -187,7 +208,7 @@ Expression.prototype.toString = function()
 			str += " = " + this.val + ">";
 		}
 	} else if (this.op === undefined) {
-		str += e;
+		str += this.toString();
 	} else if (this.op !== Object(this.op)) {
 		str += this.op.sym;
 	} else {
@@ -197,6 +218,72 @@ Expression.prototype.toString = function()
 		}
 	}
 	str += ")";
+
+	return str;
+}
+
+/**
+ * Turns an Expression into an AsciiMath String that can be interpreted by
+ * MathJax for display to the user.
+ */
+Expression.prototype.toAMString = function()
+{
+	// var str = "(";
+	var str = "";
+	if (this.name !== undefined) {
+		if (this.val === undefined) {
+			str += this.name;
+		} else {
+			str += this.val;
+		}
+	} else if (this.op === undefined) {
+		str += this.toString();
+	} else {
+		switch (this.op.args) {
+			case 2:
+				if (this.op === mul) {
+					if (this.args[0] !== 1
+						&& (this.args[1] === 1 || this.args[1].val === 1)) {
+							str += this.args[0].toAMString();
+							break;
+						} else if (this.args[1] !== 1
+							&& (this.args[0] === 1 || this.args[0].val === 1)) {
+								str += this.args[1].toAMString();
+								break;
+							}
+				}
+				str += isFinite(this.args[0])
+					? this.args[0].toString()
+					: this.args[0].toAMString();
+				if (this.op !== mul) {
+					str += this.op.sym;
+				} else {
+					str += " ";
+				}
+				str += isFinite(this.args[1])
+					? this.args[1].toString()
+					: this.args[1].toAMString();
+				break;
+			case 1:
+				if (this.op !== id) {
+					str += this.op.sym + "(";
+				}
+				str += isFinite(this.args[0])
+					? this.args[0].toString()
+					: this.args[0].toAMString();
+				if (this.op !== id) {
+					str += ")";
+				}
+				break;
+			case 0:
+				str += this.op.sym;
+				break;
+			default:
+				str += "<op?>";
+				break;
+		}
+	}
+	// str += ")";
 
 	return str;
 }
@@ -434,9 +521,15 @@ var symbols = [
 	"rand",
 ];
 
+function _op_out_sym()
+{
+	return this.sym;
+}
+
 /* Assign operators their symbols. */
 for (var i = 0; i < operators.length; i++) {
 	operators[i].sym = symbols[i];
+	operators[i].toString = _op_out_sym;
 }
 
 /**
@@ -478,6 +571,23 @@ function constify(exp, cstr)
 	var str    = exp.toString();
 	while (str.includes("c ")) {
 		str = str.replace("c ", cstr + (cindex++) + " ");
+	}
+	return interpret(str);
+}
+
+/**
+ * Change the generic constant `c` to unique constant scalar adjustments to
+ * `exp`, like `c1`, `c2`, `c3`, etc.
+ */
+function amconstify(exp, cstr)
+{
+	cstr = cstr || "c";
+	// var amcstr = cstr.replace(/(.)/g, "$1_");
+	var amcstr = cstr;
+	var cindex = 1;
+	var str    = exp.toString();
+	while (str.includes("c ")) {
+		str = str.replace("c ", amcstr + (cindex++) + "} ");
 	}
 	return interpret(str);
 }

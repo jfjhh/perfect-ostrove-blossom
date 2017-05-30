@@ -168,7 +168,7 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 	this.n       = a[4];     /* The number of bullets.                  */
 	this.i       = a[5];     /* The increment of bullets. Often 1.      */
 	this.p       = a[6];     /* The period of the Danmaku is repeated.  */
-	this.ttl     = 1 * FPS;  /* Frames until the Danmaku disappears.    */
+	this.ttl     = 2 * FPS;  /* Frames until the Danmaku disappears.    */
 	this.vars    = vars;     /* Save the variables used in Expressions. */
 	this.bullets = [];       /* Internal Danmaku Bullet list.           */
 }
@@ -200,6 +200,14 @@ Danmaku.prototype.fork = function(death_callback)
 	d.t0        = frames;
 	d.deathfunc = death_callback;
 	danmaku.push(d);
+
+	/* Update MathJax. */
+	var xmath = MathJax.Hub.getAllJax("x_expr")[0];
+	var ymath = MathJax.Hub.getAllJax("y_expr")[0];
+	MathJax.Hub.Queue(["Text", xmath,
+		"x(t) = " + d.x.toAMString()]);
+	MathJax.Hub.Queue(["Text", ymath,
+		"y(t) = " + d.y.toAMString()]);
 
 	/* Schedule it to run periodically. */
 	var sched_handle = schedule_frames(d.run.bind(d), DANMAKU_FRAMES);
@@ -747,22 +755,31 @@ function init()
 	var perm_syms = [];
 	for (var i = 0; i < perm_base.length; i++) {
 		perm_syms[i] = perm_base[i].map(function(op) {
-			return symbols[operators.indexOf(op)];
+			return op.toString();
 		});
 	}
 
-	console.log("Permutation Sets:");
-	perm_syms.map(function(symset) {
-		console.log(symset.toString());
-	});
+	var symsets = perm_syms.map(function(symset) {
+		var s = symset.map(function(sym) {
+			if (sym === "*") {
+				return "\\cdot";
+			}
+			return sym;
+		}).toString().replace(/,/g, "\\enspace ");
+		return "\\{" + s + "\\}";
+	}).toString().replace(/,/g, " \\enspace\\oplus\\enspace ");
+	var perm_elem       = document.getElementById("perm_set");
+	perm_elem.innerHTML = "\\[\\mathbf{P\\;:\\enspace}\\mathit{" + symsets + "}.\\]";
+	MathJax.Hub.Queue(["Typeset", MathJax.Hub, perm_elem]);
 
-	console.log("Permuting over", count_perms_bin(perm_base), "functions ...");
+	document.getElementById("max_perms").innerHTML = count_perms_bin(perm_base);
 	var perms = perm_funcs(perm_base);
-	console.log("... Done!");
 
-	var consts = (4 * perm_base.length) - 1; /* Binary only. */
-	var cxstr  = "cx";
-	var cystr  = "cy";
+	var consts  = (4 * perm_base.length) - 1; /* Binary only. */
+	var cxstr   = "cx";
+	var cystr   = "cy";
+	var cxamstr = "c_{x_";
+	var cyamstr = "c_{y_";
 
 	var subs   = {
 		wait     : 8 * FPS,
@@ -772,18 +789,22 @@ function init()
 		num      : 64,
 		inc      : 1,
 		v        : 8,
-		x0       : WIDTH  / 2,
-		y0       : HEIGHT / 2,
+		x_0      : WIDTH  / 2,
+		y_0      : HEIGHT / 2,
 		tau      : TAU,
 		theta    : "(* (* tau 1) (/ i n))",
-		vx       : "(* (* t v) (cos theta))",
-		vy       : "(* (* t v) (sin theta))",
+		v_x      : "(* (* v t) (cos theta))",
+		v_y      : "(* (* v t) (sin theta))",
 		t1       : "(= theta)", /* Parameter 1. */
 		t2       : "(= t)",     /* Parameter 2. */
 	};
 
+	var perm      = 0;
+	var perm_elem = document.getElementById("cur_perm");
 	var next_perm = function(px, py) {
-		console.log("=== Next ===");
+		perm++;
+		perm_elem.innerHTML = perm;
+
 		subs.permx = constify(perms[px], cxstr).toString();
 		subs.permy = constify(perms[py], cystr).toString();
 
@@ -792,18 +813,14 @@ function init()
 			subs[cystr + i] = 1;
 		}
 
-		console.log("Danmaku (", px, ",", py, ")");
-		console.log("X: ", subs.permx.toString());
-		console.log("Y: ", subs.permy.toString());
-
 		var d = new Danmaku(
-			"(+ x0 (+ vx permx))", /* x */
-			"(+ y0 (+ vy permy))", /* y */
-			"(/ f 8)" ,           /* t */
-			"(= br)",              /* r */
-			"(= num)",             /* n */
-			"(= inc)",             /* i */
-			"(= wait)",            /* p */
+			"(+ x_0 (+ v_x permx))", /* x */
+			"(+ y_0 (+ v_y permy))", /* y */
+			"(/ f 8)" ,              /* t */
+			"(= br)",                /* r */
+			"(= num)",               /* n */
+			"(= inc)",               /* i */
+			"(= wait)",              /* p */
 			subs);
 
 		if (++py > perms.length - 1) {
@@ -814,15 +831,21 @@ function init()
 			}
 		}
 		
-		over.clearRect(0, 0, WIDTH, HEIGHT);
-		d.fork(next_perm.bind(d, px, py));
+		MathJax.Hub.Queue(function() {
+			over.clearRect(0, 0, WIDTH, HEIGHT);
+			d.fork(next_perm.bind(d, px, py));
+		});
 	};
 
 	next_perm(0, 0);
 }
 
 /* Initialize the whole thing. */
-init();
+// document.addEventListener("DOMContentLoaded", function() {
+// 	getScript("../mathjax/MathJax.js?config=AM_HTMLorMML", function() {
+// 		init();
+// 	});
+// }, false);
 
 /* Set flags on user input for player movement and other controls. */
 window.onkeydown = function(event)
