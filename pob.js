@@ -168,7 +168,7 @@ function Danmaku(x, y, t, r, n, i, f, subs)
 	this.n       = a[4];     /* The number of bullets.                  */
 	this.i       = a[5];     /* The increment of bullets. Often 1.      */
 	this.p       = a[6];     /* The period of the Danmaku is repeated.  */
-	this.ttl     = 2 * FPS;  /* Frames until the Danmaku disappears.    */
+	this.ttl     = 8 * FPS;  /* Frames until the Danmaku disappears.    */
 	this.vars    = vars;     /* Save the variables used in Expressions. */
 	this.bullets = [];       /* Internal Danmaku Bullet list.           */
 }
@@ -663,6 +663,8 @@ function init()
 	"color: #F4F; background: #FEF;",
 	"color: #F8F; background: #FEF;");
 
+	console.log(MathJax.Message.Log());
+
 	/* Reset values. */
 	frames         = 0;
 	density_res    = IWIDTH;
@@ -749,8 +751,8 @@ function init()
 	 */
 	var perm_base = [
 		[add, mul],
-		[tan, sin, cos],
-		[sin, cos],
+		[sin, tan],
+		[sub, div],
 	];
 	var perm_syms = [];
 	for (var i = 0; i < perm_base.length; i++) {
@@ -772,8 +774,8 @@ function init()
 	perm_elem.innerHTML = "\\[\\mathbf{P\\;:\\enspace}\\mathit{" + symsets + "}.\\]";
 	MathJax.Hub.Queue(["Typeset", MathJax.Hub, perm_elem]);
 
-	document.getElementById("max_perms").innerHTML = count_perms_bin(perm_base);
 	var perms = perm_funcs(perm_base);
+	document.getElementById("max_perms").innerHTML = Math.pow(perms.length, 2);
 
 	var consts  = (4 * perm_base.length) - 1; /* Binary only. */
 	var cxstr   = "cx";
@@ -788,7 +790,7 @@ function init()
 		br       : 3,
 		num      : 64,
 		inc      : 1,
-		v        : 8,
+		v        : 3,
 		x_0      : WIDTH  / 2,
 		y_0      : HEIGHT / 2,
 		tau      : TAU,
@@ -802,6 +804,7 @@ function init()
 	var perm      = 0;
 	var perm_elem = document.getElementById("cur_perm");
 	var next_perm = function(px, py) {
+		MathJax.Hub.Queue(function() {
 		perm++;
 		perm_elem.innerHTML = perm;
 
@@ -831,9 +834,8 @@ function init()
 			}
 		}
 		
-		MathJax.Hub.Queue(function() {
-			over.clearRect(0, 0, WIDTH, HEIGHT);
-			d.fork(next_perm.bind(d, px, py));
+		over.clearRect(0, 0, WIDTH, HEIGHT);
+		d.fork(next_perm.bind(d, px, py));
 		});
 	};
 

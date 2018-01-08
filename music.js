@@ -8,7 +8,7 @@
 var Music = (function()
 {
 
-var songdir = "../bgm"; /* Place `bgm` in the same parent directory as POB. */
+var songdir = "bgm";
 var songs   = [
 	"1.mp3",
 	"2.mp3",

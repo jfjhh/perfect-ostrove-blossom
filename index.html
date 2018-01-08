@@ -25,6 +25,7 @@
 <html>
 	<head>
 		<meta charset="utf-8">
+		<link rel="stylesheet" type="text/css" href="display.css"></link>
 		<script type="text/javascript">
 /**
 * Gets a script with callback on success.
@@ -44,121 +45,6 @@ function getScript(url,success)
 	head.appendChild(script);
 }
 		</script>
-		<style>
-body
-{
-	color       : #F8F;
-	background  : url("pob.jpg") repeat;
-	font-family : "Comic Neue", "Comic Sans MS", "Helvetica", Sans-Serif;
-	overflow    : hidden;
-}
-
-div#container
-{
-	position           : absolute;
-	top                : 0;
-	left               : 0;
-	height             : 100vh;
-	width              : 100vw;
-	background         : rgba(0, 0, 0, 0.9);
-	-webkit-transition : background-color 2s linear;
-	-moz-transition    : background-color 2s linear;
-	-o-transition      : background-color 2s linear;
-	transition         : background-color 2s linear;
-}
-
-div.change#container
-{
-	background : rgba(0, 0, 0, 0.9);
-}
-
-h1
-{
-	text-align : center;
-}
-
-canvas
-{
-	border : #111 2px solid;
-}
-
-canvas#bullet_canvas, canvas#overlay_canvas,
-canvas#sprite_canvas, canvas#bg_canvas
-{
-	position : absolute;
-	left     : 1em;
-}
-
-canvas#bg_canvas
-{
-	z-index    : 0;
-	background : #000;
-}
-
-canvas#bullet_canvas
-{
-  z-index : 2;
-}
-
-canvas#overlay_canvas
-{
-  z-index : 1;
-}
-
-canvas#sprite_canvas
-{
-  z-index : 3;
-}
-
-canvas#info_canvas
-{
-	position   : absolute;
-	left       : 21em;
-	margin-top : 250px;
-}
-
-div.expr
-{
-	font-size  : 0.75em;
-}
-
-div#eqns
-{
-	position   : absolute;
-	left       : 22em;
-	margin-top : 1em;
-}
-
-img
-{
-	position   : absolute;
-	left       : 21em;
-	margin-top : 1em;
-}
-
-span#perm_set
-{
-	font-size : 0.325em;
-}
-
-span#song
-{
-	margin-top      : -2em;
-	margin-bottom   : 1em;
-	color           : #848;
-	font-size       : 0.5em;
-	font-weight     : bold;
-	font-style      : italic;
-	text-decoration : italic;
-	text-align      : center;
-	display         : block;
-}
-
-span#song:hover
-{
-	color : #A6A;
-}
-		</style>
 	</head>
 	<body>
 		<div id="container">
@@ -194,17 +80,18 @@ span#song:hover
 		<script type="text/javascript" src="math.js" async></script>
 		<!-- <script type="text/javascript" src="pob.js"></script> -->
 		<script type="text/javascript" defer>
-/**
- * Load all the things.
- */
+			/**
+			* Load all the things.
+			 */
 document.addEventListener("DOMContentLoaded", function() {
-	getScript("../mathjax/MathJax.js?config=TeX-MML-AM_CHTML", function() {
-		MathJax.Hub.Queue(function() {
-			getScript("pob.js", function() {
-				init();
+	getScript("https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML",
+		function() {
+			MathJax.Hub.Queue(function() {
+				getScript("pob.js", function() {
+					init();
+				});
 			});
 		});
-	});
 });
 
 /*
